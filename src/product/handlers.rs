@@ -1,0 +1,52 @@
+use super::models::{NewProduct, Product};
+use axum::{
+    extract::{Json, State},
+    http::StatusCode,
+};
+use axum_shop::schema;
+use deadpool_diesel::postgres::Pool;
+use diesel::prelude::*;
+
+fn internal_error<E>(err: E) -> (StatusCode, String)
+where
+    E: std::error::Error,
+{
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+}
+
+pub async fn create_product(
+    State(pool): State<Pool>,
+    Json(payload): Json<NewProduct>,
+) -> Result<Json<Product>, (StatusCode, String)> {
+    let conn = pool.get().await.map_err(internal_error)?;
+    let res = conn
+        .interact(|conn| {
+            diesel::insert_into(schema::products::table)
+                .values(payload)
+                .returning(Product::as_returning())
+                .get_result(conn)
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
+}
+
+pub async fn get_products(
+    State(pool): State<Pool>,
+) -> Result<Json<Vec<Product>>, (StatusCode, String)> {
+    let conn = pool.get().await.map_err(internal_error)?;
+
+    let res = conn
+        .interact(|conn| {
+            schema::products::table
+                .select(Product::as_select())
+                .load(conn)
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
+}

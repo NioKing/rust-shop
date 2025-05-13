@@ -35,7 +35,7 @@ diesel::table! {
         id -> Int4,
         #[max_length = 100]
         title -> Varchar,
-        price -> Money,
+        price -> Float8,
         description -> Text,
         image -> Nullable<Text>,
     }
