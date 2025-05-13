@@ -1,9 +1,10 @@
 use axum_shop::schema::{categories, product_categories};
 use diesel::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::product::models::Product;
 
-#[derive(Queryable, Selectable, Debug, PartialEq, Identifiable)]
+#[derive(Queryable, Selectable, Debug, PartialEq, Identifiable, Serialize)]
 #[diesel(table_name=categories)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Category {
@@ -11,13 +12,13 @@ pub struct Category {
     pub title: String,
 }
 
-#[derive(Insertable)]
-#[diesel(table_name=categories)]
+#[derive(Insertable, Deserialize)]
+#[diesel(table_name = categories)]
 pub struct NewCategory {
     pub title: String,
 }
 
-#[derive(Identifiable, Selectable, Queryable, Associations, Debug)]
+#[derive(Identifiable, Selectable, Queryable, Associations, Debug, Serialize, Deserialize)]
 #[diesel(belongs_to(Product))]
 #[diesel(belongs_to(Category))]
 #[diesel(table_name = product_categories)]

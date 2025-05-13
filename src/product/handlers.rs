@@ -1,6 +1,6 @@
 use super::models::{NewProduct, Product};
 use axum::{
-    extract::{Json, State},
+    extract::{Json, Path, State},
     http::StatusCode,
 };
 use axum_shop::schema;
@@ -43,6 +43,25 @@ pub async fn get_products(
             schema::products::table
                 .select(Product::as_select())
                 .load(conn)
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
+}
+
+pub async fn remove_product(
+    Path(id): Path<i32>,
+    State(pool): State<Pool>,
+) -> Result<Json<Product>, (StatusCode, String)> {
+    let conn = pool.get().await.map_err(internal_error)?;
+
+    let res = conn
+        .interact(move |conn| {
+            diesel::delete(schema::products::table.find(id))
+                .returning(Product::as_returning())
+                .get_result(conn)
         })
         .await
         .map_err(internal_error)?
