@@ -2,15 +2,16 @@ mod auth;
 mod cart;
 mod category;
 mod product;
+mod utils;
 
 use axum::{
     Router,
-    routing::{delete, get, post},
+    routing::{delete, get},
 };
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use listenfd::ListenFd;
 use std::env;
-use std::net::SocketAddr;
+// use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/");

@@ -1,4 +1,5 @@
 use super::models::{NewProduct, Product};
+use crate::utils::error::internal_error;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -6,13 +7,6 @@ use axum::{
 use axum_shop::schema;
 use deadpool_diesel::postgres::Pool;
 use diesel::prelude::*;
-
-fn internal_error<E>(err: E) -> (StatusCode, String)
-where
-    E: std::error::Error,
-{
-    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-}
 
 pub async fn create_product(
     State(pool): State<Pool>,
