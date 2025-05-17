@@ -50,7 +50,7 @@ async fn main() {
         )
         .route(
             "/categories/{id}",
-            patch(category::handlers::update_category),
+            patch(category::handlers::update_category).get(category::handlers::get_category_by_id),
         )
         .with_state(pool);
     let app = Router::new().nest("/api", routes);
