@@ -1,5 +1,5 @@
 use super::models::{NewProduct, Product};
-use crate::utils::error::internal_error;
+use crate::utils::internal_error;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -7,6 +7,7 @@ use axum::{
 use axum_shop::schema;
 use deadpool_diesel::postgres::Pool;
 use diesel::prelude::*;
+use schema::products;
 
 pub async fn create_product(
     State(pool): State<Pool>,
@@ -15,7 +16,7 @@ pub async fn create_product(
     let conn = pool.get().await.map_err(internal_error)?;
     let res = conn
         .interact(|conn| {
-            diesel::insert_into(schema::products::table)
+            diesel::insert_into(products::table)
                 .values(payload)
                 .returning(Product::as_returning())
                 .get_result(conn)
@@ -33,10 +34,26 @@ pub async fn get_products(
     let conn = pool.get().await.map_err(internal_error)?;
 
     let res = conn
-        .interact(|conn| {
-            schema::products::table
+        .interact(|conn| products::table.select(Product::as_select()).load(conn))
+        .await
+        .map_err(internal_error)?
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
+}
+
+pub async fn get_product_by_id(
+    State(pool): State<Pool>,
+    Path(id): Path<i32>,
+) -> Result<Json<Product>, (StatusCode, String)> {
+    let conn = pool.get().await.map_err(internal_error)?;
+
+    let res = conn
+        .interact(move |conn| {
+            products::table
+                .find(id)
                 .select(Product::as_select())
-                .load(conn)
+                .get_result(conn)
         })
         .await
         .map_err(internal_error)?
@@ -53,7 +70,28 @@ pub async fn remove_product(
 
     let res = conn
         .interact(move |conn| {
-            diesel::delete(schema::products::table.find(id))
+            diesel::delete(products::table.find(id))
+                .returning(Product::as_returning())
+                .get_result(conn)
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
+}
+
+pub async fn update_product(
+    State(pool): State<Pool>,
+    Path(id): Path<i32>,
+    Json(payload): Json<NewProduct>,
+) -> Result<Json<Product>, (StatusCode, String)> {
+    let conn = pool.get().await.map_err(internal_error)?;
+
+    let res = conn
+        .interact(move |conn| {
+            diesel::update(products::table.find(id))
+                .set(products::title.eq(payload.title))
                 .returning(Product::as_returning())
                 .get_result(conn)
         })

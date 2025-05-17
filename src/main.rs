@@ -6,7 +6,7 @@ mod utils;
 
 use axum::{
     Router,
-    routing::{delete, get},
+    routing::{delete, get, patch},
 };
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use listenfd::ListenFd;
@@ -36,15 +36,25 @@ async fn main() {
     let routes = Router::new()
         .route(
             "/products",
-            get(product::handlers::get_products).post(product::handlers::create_product), // .delete(product::handlers::remove_product),
+            get(product::handlers::get_products).post(product::handlers::create_product),
         )
-        .route("/products/{id}", delete(product::handlers::remove_product))
+        .route(
+            "/products/{id}",
+            delete(product::handlers::remove_product)
+                .patch(product::handlers::update_product)
+                .get(product::handlers::get_product_by_id),
+        )
         .route(
             "/categories",
             get(category::handlers::get_categories).post(category::handlers::create_category),
         )
+        .route(
+            "/categories/{id}",
+            patch(category::handlers::update_category),
+        )
         .with_state(pool);
     let app = Router::new().nest("/api", routes);
+    let app = app.fallback(utils::handler_404);
     // let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     // tracing::debug!("listening on {:?}", addr);
     // let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
