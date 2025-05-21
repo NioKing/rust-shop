@@ -31,3 +31,27 @@ pub struct ProductCategory {
     pub product_id: i32,
     pub category_id: i32,
 }
+
+#[derive(Insertable, Deserialize, AsChangeset)]
+#[diesel(table_name = products)]
+pub struct UpdateProduct {
+    pub title: Option<String>,
+    pub price: Option<f64>,
+    pub description: Option<String>,
+    pub image: Option<String>,
+    // pub category_id: Option<i32>,
+}
+
+#[derive(Deserialize)]
+pub struct CreateProductWithCategories {
+    #[serde(flatten)]
+    pub product: NewProduct,
+    pub category_ids: Vec<i32>,
+}
+
+#[derive(Serialize)]
+pub struct ProductWithCategories {
+    #[serde(flatten)]
+    pub product: Product,
+    pub categories: Vec<crate::category::models::Category>,
+}

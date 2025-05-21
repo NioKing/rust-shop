@@ -36,7 +36,8 @@ async fn main() {
     let routes = Router::new()
         .route(
             "/products",
-            get(product::handlers::get_products).post(product::handlers::create_product),
+            get(product::handlers::get_products)
+                .post(product::handlers::create_product_with_categories),
         )
         .route(
             "/products/{id}",
