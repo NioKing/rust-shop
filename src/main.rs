@@ -58,6 +58,11 @@ async fn main() {
             "/users",
             get(auth::handlers::get_all_users).post(auth::handlers::create_user),
         )
+        .route(
+            "/users/{id}",
+            patch(auth::handlers::update_user_email_or_password)
+                .get(auth::handlers::get_user_by_id),
+        )
         .with_state(pool);
     let app = Router::new().nest("/api", routes);
     let app = app.fallback(utils::handler_404);

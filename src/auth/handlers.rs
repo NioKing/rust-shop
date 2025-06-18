@@ -16,6 +16,7 @@ pub async fn create_user(
     use axum_shop::schema::users;
 
     let conn = pool.get().await.map_err(internal_error)?;
+
     let hashed_pass =
         tokio::task::spawn_blocking(move || hash(payload.password_hash, DEFAULT_COST))
             .await
@@ -58,13 +59,18 @@ pub async fn create_user(
 pub async fn get_user_by_id(
     State(pool): State<Pool>,
     Path(id): Path<Uuid>,
-) -> Result<Json<Vec<User>>, (StatusCode, String)> {
+) -> Result<Json<SafeUser>, (StatusCode, String)> {
     use axum_shop::schema::users;
 
     let conn = pool.get().await.map_err(internal_error)?;
 
     let res = conn
-        .interact(|conn| users::table.select(User::as_select()).load(conn))
+        .interact(move |conn| {
+            users::table
+                .filter(users::id.eq(&id))
+                .select(SafeUser::as_select())
+                .get_result(conn)
+        })
         .await
         .map_err(internal_error)?
         .map_err(internal_error)?;
@@ -75,16 +81,16 @@ pub async fn get_user_by_id(
 pub async fn get_user_by_email(
     State(pool): State<Pool>,
     Json(payload): Json<UserEmail>,
-) -> Result<Json<User>, (StatusCode, String)> {
+) -> Result<Json<SafeUser>, (StatusCode, String)> {
     use axum_shop::schema::users;
 
     let conn = pool.get().await.map_err(internal_error)?;
 
     let res = conn
-        .interact(|conn| {
+        .interact(move |conn| {
             users::table
-                .filter(users::email.eq(payload.email))
-                .select(User::as_select())
+                .filter(users::email.eq(&payload.email))
+                .select(SafeUser::as_select())
                 .get_result(conn)
         })
         .await
