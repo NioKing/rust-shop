@@ -6,7 +6,7 @@ mod utils;
 
 use axum::{
     Router,
-    routing::{delete, get, patch},
+    routing::{delete, get, patch, post},
 };
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use listenfd::ListenFd;
@@ -34,6 +34,7 @@ async fn main() {
     // }
     //
     let routes = Router::new()
+        // .route("/users", post(auth::handlers::create_user))
         .route(
             "/products",
             get(product::handlers::get_products)
@@ -52,6 +53,10 @@ async fn main() {
         .route(
             "/categories/{id}",
             patch(category::handlers::update_category).get(category::handlers::get_category_by_id),
+        )
+        .route(
+            "/users",
+            get(auth::handlers::get_all_users).post(auth::handlers::create_user),
         )
         .with_state(pool);
     let app = Router::new().nest("/api", routes);
