@@ -76,6 +76,7 @@ async fn main() {
             patch(auth::handlers::update_user_email_or_password)
                 .get(auth::handlers::get_user_by_id),
         )
+        .route("/carts", get(cart::handlers::get_all_cart))
         .layer(middleware::from_fn(utils::print_req_res))
         .with_state(pool);
 

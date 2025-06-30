@@ -1,10 +1,10 @@
 use axum_shop::schema::carts;
 use chrono::NaiveDate;
 use diesel::prelude::*;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Queryable, Selectable, Debug, PartialEq, Identifiable)]
+#[derive(Queryable, Selectable, Debug, PartialEq, Identifiable, Serialize)]
 #[diesel(table_name=carts)]
 #[diesel(belongs_to(User))]
 #[diesel(check_for_backend(diesel::pg::Pg))]

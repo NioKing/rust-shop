@@ -1,6 +1,6 @@
 #![allow(dead_code, unused)]
 use super::models::{NewUser, SafeUser, UpdateUser, User, UserEmail};
-use crate::cart::handlers::create_cart;
+use crate::cart::models::NewCart;
 use crate::utils::internal_error;
 use crate::utils::types::Pool;
 use axum::{
@@ -9,6 +9,7 @@ use axum::{
 };
 use axum_validated_extractors::ValidatedJson;
 use bcrypt::{DEFAULT_COST, hash, verify};
+use chrono::Local;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
@@ -17,6 +18,7 @@ pub async fn create_user(
     State(pool): State<Pool>,
     ValidatedJson(payload): ValidatedJson<NewUser>,
 ) -> Result<Json<SafeUser>, (StatusCode, String)> {
+    use axum_shop::schema::carts;
     use axum_shop::schema::users;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
@@ -50,6 +52,19 @@ pub async fn create_user(
         .values(&user_data)
         .returning(SafeUser::as_returning())
         .get_result(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    let updated_at = Local::now().date_naive();
+
+    let cart_data = NewCart {
+        user_id,
+        updated_at,
+    };
+
+    diesel::insert_into(carts::table)
+        .values(&cart_data)
+        .execute(&mut conn)
         .await
         .map_err(internal_error)?;
 
