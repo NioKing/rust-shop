@@ -1,21 +1,27 @@
 use super::models::{NewUser, SafeUser, UpdateUser, User, UserEmail};
+use crate::cart::handlers::create_cart;
 use crate::utils::internal_error;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
 };
+use axum_validated_extractors::ValidatedJson;
 use bcrypt::{DEFAULT_COST, hash, verify};
-use deadpool_diesel::postgres::Pool;
 use diesel::prelude::*;
+use diesel_async::{
+    AsyncPgConnection, RunQueryDsl, pooled_connection::AsyncDieselConnectionManager,
+};
 use uuid::Uuid;
+
+pub type Pool = bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>;
 
 pub async fn create_user(
     State(pool): State<Pool>,
-    Json(payload): Json<NewUser>,
+    ValidatedJson(payload): ValidatedJson<NewUser>,
 ) -> Result<Json<SafeUser>, (StatusCode, String)> {
     use axum_shop::schema::users;
 
-    let conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.map_err(internal_error)?;
 
     let hashed_pass =
         tokio::task::spawn_blocking(move || hash(payload.password_hash, DEFAULT_COST))
@@ -42,15 +48,11 @@ pub async fn create_user(
         hashed_rt: None,
     };
 
-    let res = conn
-        .interact(|conn| {
-            diesel::insert_into(users::table)
-                .values(user_data)
-                .returning(SafeUser::as_returning())
-                .get_result(conn)
-        })
+    let res = diesel::insert_into(users::table)
+        .values(&user_data)
+        .returning(SafeUser::as_returning())
+        .get_result(&mut conn)
         .await
-        .map_err(internal_error)?
         .map_err(internal_error)?;
 
     Ok(Json(res))
@@ -62,17 +64,13 @@ pub async fn get_user_by_id(
 ) -> Result<Json<SafeUser>, (StatusCode, String)> {
     use axum_shop::schema::users;
 
-    let conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let res = conn
-        .interact(move |conn| {
-            users::table
-                .filter(users::id.eq(&id))
-                .select(SafeUser::as_select())
-                .get_result(conn)
-        })
+    let res = users::table
+        .filter(users::id.eq(&id))
+        .select(SafeUser::as_select())
+        .get_result(&mut conn)
         .await
-        .map_err(internal_error)?
         .map_err(internal_error)?;
 
     Ok(Json(res))
@@ -84,17 +82,13 @@ pub async fn get_user_by_email(
 ) -> Result<Json<SafeUser>, (StatusCode, String)> {
     use axum_shop::schema::users;
 
-    let conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let res = conn
-        .interact(move |conn| {
-            users::table
-                .filter(users::email.eq(&payload.email))
-                .select(SafeUser::as_select())
-                .get_result(conn)
-        })
+    let res = users::table
+        .filter(users::email.eq(&payload.email))
+        .select(SafeUser::as_select())
+        .get_result(&mut conn)
         .await
-        .map_err(internal_error)?
         .map_err(internal_error)?;
 
     Ok(Json(res))
@@ -113,12 +107,12 @@ pub async fn get_all_users(
 ) -> Result<Json<Vec<SafeUser>>, (StatusCode, String)> {
     use axum_shop::schema::users;
 
-    let conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let res = conn
-        .interact(|conn| users::table.select(SafeUser::as_select()).load(conn))
+    let res = users::table
+        .select(SafeUser::as_select())
+        .load(&mut conn)
         .await
-        .map_err(internal_error)?
         .map_err(internal_error)?;
 
     Ok(Json(res))
