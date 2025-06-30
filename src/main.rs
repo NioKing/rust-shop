@@ -32,10 +32,6 @@ async fn main() {
     dotenv::dotenv().ok();
 
     let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    // let manager = deadpool_diesel::postgres::Manager::new(db_url, deadpool_diesel::Runtime::Tokio1);
-    // let pool = deadpool_diesel::postgres::Pool::builder(manager)
-    //     .build()
-    //     .unwrap();
 
     let config = AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
     let pool = bb8::Pool::builder().build(config).await.unwrap();
@@ -48,7 +44,7 @@ async fn main() {
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
-    //
+
     // {
     //     let conn = pool.get().await.unwrap();
     //     conn.interact(|conn| conn.run_pending_migrations(MIGRATIONS).map(|_| ()))
@@ -91,10 +87,8 @@ async fn main() {
 
     let app = Router::new().nest("/api", routes);
     let app = app.fallback(utils::handler_404);
-    // let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    // tracing::debug!("listening on {:?}", addr);
-    // let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let mut listenfd = ListenFd::from_env();
+
     let listener = match listenfd.take_tcp_listener(0).unwrap() {
         // if we are given a tcp listener on listen fd 0, we use that one
         Some(listener) => {
@@ -104,6 +98,7 @@ async fn main() {
         // otherwise fall back to local listening
         None => TcpListener::bind("127.0.0.1:3000").await.unwrap(),
     };
+
     println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }

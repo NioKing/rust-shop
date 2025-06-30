@@ -1,17 +1,14 @@
 use super::models::{Category, NewCategory};
 use crate::utils::internal_error;
+use crate::utils::types::Pool;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
 };
 use axum_shop::schema;
 use diesel::prelude::*;
-use diesel_async::{
-    AsyncPgConnection, RunQueryDsl, pooled_connection::AsyncDieselConnectionManager,
-};
+use diesel_async::RunQueryDsl;
 use schema::categories;
-
-pub type Pool = bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>;
 
 pub async fn create_category(
     State(pool): State<Pool>,

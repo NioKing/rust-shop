@@ -4,18 +4,14 @@ use super::models::{
 };
 use crate::category::models::Category;
 use crate::utils::internal_error;
+use crate::utils::types::Pool;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
 };
 use axum_shop::schema::{categories, product_categories, products};
-// use deadpool_diesel::postgres::Pool;
 use diesel::prelude::*;
-use diesel_async::{
-    AsyncPgConnection, RunQueryDsl, pooled_connection::AsyncDieselConnectionManager,
-};
-
-pub type Pool = bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>;
+use diesel_async::RunQueryDsl;
 
 pub async fn create_product(
     State(pool): State<Pool>,
@@ -39,36 +35,29 @@ pub async fn create_product_with_categories(
 ) -> Result<Json<Product>, (StatusCode, String)> {
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    // let res = conn
-    //     .interact(move |conn| {
-    //         conn.transaction(|conn| {
-    //             let product = diesel::insert_into(products::table)
-    //                 .values(&payload.product)
-    //                 .returning(Product::as_returning())
-    //                 .get_result(conn)?;
-    //
-    //             let categories = payload
-    //                 .category_ids
-    //                 .iter()
-    //                 .map(|category_id| ProductCategory {
-    //                     product_id: product.id,
-    //                     category_id: *category_id,
-    //                 })
-    //                 .collect::<Vec<_>>();
-    //
-    //             diesel::insert_into(product_categories::table)
-    //                 .values(&categories)
-    //                 .execute(conn)?;
-    //
-    //             Ok(product)
-    //         })
-    //     })
-    //     .await
-    //     .map_err(|e| internal_error(e))?
-    //     .map_err(|e: diesel::result::Error| internal_error(e))?;
+    let product = diesel::insert_into(products::table)
+        .values(&payload.product)
+        .returning(Product::as_returning())
+        .get_result(&mut conn)
+        .await
+        .map_err(internal_error)?;
 
-    todo!()
-    // Ok(Json(res))
+    let categories = payload
+        .category_ids
+        .iter()
+        .map(|category_id| ProductCategory {
+            product_id: product.id,
+            category_id: *category_id,
+        })
+        .collect::<Vec<_>>();
+
+    diesel::insert_into(product_categories::table)
+        .values(&categories)
+        .execute(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Json(product))
 }
 
 pub async fn get_products(

@@ -1,6 +1,7 @@
 use super::models::{NewUser, SafeUser, UpdateUser, User, UserEmail};
 use crate::cart::handlers::create_cart;
 use crate::utils::internal_error;
+use crate::utils::types::Pool;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -8,12 +9,8 @@ use axum::{
 use axum_validated_extractors::ValidatedJson;
 use bcrypt::{DEFAULT_COST, hash, verify};
 use diesel::prelude::*;
-use diesel_async::{
-    AsyncPgConnection, RunQueryDsl, pooled_connection::AsyncDieselConnectionManager,
-};
+use diesel_async::RunQueryDsl;
 use uuid::Uuid;
-
-pub type Pool = bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>;
 
 pub async fn create_user(
     State(pool): State<Pool>,
