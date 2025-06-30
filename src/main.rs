@@ -6,22 +6,16 @@ mod utils;
 
 use axum::{
     Router,
-    body::{Body, Bytes},
-    extract::Request,
-    http::StatusCode,
-    middleware::{self, Next},
-    response::{IntoResponse, Response},
+    middleware::{self},
     routing::{delete, get, patch, post},
 };
-use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
-use listenfd::ListenFd;
-use std::env;
-// use std::net::SocketAddr;
 use diesel_async::{
     AsyncPgConnection,
     pooled_connection::{AsyncDieselConnectionManager, bb8},
 };
-use http_body_util::BodyExt;
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
+use listenfd::ListenFd;
+use std::env;
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -82,7 +76,7 @@ async fn main() {
             patch(auth::handlers::update_user_email_or_password)
                 .get(auth::handlers::get_user_by_id),
         )
-        .layer(middleware::from_fn(print_req_res))
+        .layer(middleware::from_fn(utils::print_req_res))
         .with_state(pool);
 
     let app = Router::new().nest("/api", routes);
@@ -101,43 +95,4 @@ async fn main() {
 
     println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
-}
-
-async fn print_req_res(
-    req: Request,
-    next: Next,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let (parts, body) = req.into_parts();
-    let bytes = buffer_and_print("Request", body).await?;
-    let req = Request::from_parts(parts, Body::from(bytes));
-
-    let res = next.run(req).await;
-
-    let (parts, body) = res.into_parts();
-    let bytes = buffer_and_print("Response", body).await?;
-    let res = Response::from_parts(parts, Body::from(bytes));
-
-    Ok(res)
-}
-
-async fn buffer_and_print<B>(direction: &str, body: B) -> Result<Bytes, (StatusCode, String)>
-where
-    B: axum::body::HttpBody<Data = Bytes>,
-    B::Error: std::fmt::Display,
-{
-    let bytes = match body.collect().await {
-        Ok(collected) => collected.to_bytes(),
-        Err(err) => {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                format!("failed to read {direction} body: {err}"),
-            ));
-        }
-    };
-
-    if let Ok(body) = std::str::from_utf8(&bytes) {
-        tracing::debug!("{direction} body = {body:?}");
-    }
-
-    Ok(bytes)
 }

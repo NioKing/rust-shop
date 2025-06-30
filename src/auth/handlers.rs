@@ -1,3 +1,4 @@
+#![allow(dead_code, unused)]
 use super::models::{NewUser, SafeUser, UpdateUser, User, UserEmail};
 use crate::cart::handlers::create_cart;
 use crate::utils::internal_error;
@@ -95,7 +96,7 @@ pub async fn update_user_email_or_password(
     State(pool): State<Pool>,
     Json(payload): Json<UpdateUser>,
 ) -> Result<Json<SafeUser>, (StatusCode, String)> {
-    let conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.map_err(internal_error)?;
     todo!()
 }
 
