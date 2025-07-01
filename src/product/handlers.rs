@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use super::models::{
     CreateProductWithCategories, NewProduct, Product, ProductCategory, ProductWithCategories,
     UpdateProduct,
@@ -64,28 +65,6 @@ pub async fn get_products(
     State(pool): State<Pool>,
 ) -> Result<Json<Vec<ProductWithCategories>>, (StatusCode, String)> {
     let mut conn = pool.get().await.map_err(internal_error)?;
-
-    // let res = conn
-    //     .interact(|conn| products::table.select(Product::as_select()).load(conn))
-    //     .await
-    //     .map_err(internal_error)?
-    //     .map_err(internal_error)?;
-
-    // let tuple = conn
-    //     .interact(|conn| {
-    //         products::table
-    //             .inner_join(
-    //                 product_categories::table.on(products::id.eq(product_categories::product_id)),
-    //             )
-    //             .inner_join(
-    //                 categories::table.on(product_categories::category_id.eq(categories::id)),
-    //             )
-    //             .select((Product::as_select(), Category::as_select()))
-    //             .load::<(Product, Category)>(conn)
-    //     })
-    //     .await
-    //     .map_err(internal_error)?
-    //     .map_err(internal_error)?;
 
     let tuple = products::table
         .inner_join(product_categories::table.on(products::id.eq(product_categories::product_id)))

@@ -109,10 +109,21 @@ pub async fn get_user_by_email(
 
 pub async fn update_user_email_or_password(
     State(pool): State<Pool>,
+    Path(id): Path<Uuid>,
     Json(payload): Json<UpdateUser>,
 ) -> Result<Json<SafeUser>, (StatusCode, String)> {
+    use axum_shop::schema::users;
+
     let mut conn = pool.get().await.map_err(internal_error)?;
-    todo!()
+
+    let res = diesel::update(users::table.find(&id))
+        .set(&payload)
+        .returning(SafeUser::as_returning())
+        .get_result(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
 }
 
 pub async fn get_all_users(

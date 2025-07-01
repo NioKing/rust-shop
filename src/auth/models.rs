@@ -36,7 +36,7 @@ pub struct SafeUser {
     pub email: String,
 }
 
-#[derive(Insertable, Deserialize, Debug, Validate)]
+#[derive(Insertable, Deserialize, Debug, Validate, AsChangeset)]
 #[diesel(table_name=users)]
 pub struct UpdateUser {
     #[validate(email)]
