@@ -44,3 +44,13 @@ pub struct UpdateUser {
     #[validate(length(min = 6, message = "Your password should be at least 6 symbols long"))]
     pub password_hash: Option<String>,
 }
+
+#[derive(Deserialize, Debug, Validate)]
+pub struct UpdateUserPayload {
+    #[validate(email)]
+    pub email: Option<String>,
+    #[validate(length(min = 6, message = "Your password should be at least 6 symbols long"))]
+    pub current_password: Option<String>,
+    #[validate(length(min = 6, message = "Your password should be at least 6 symbols long"))]
+    pub new_password: Option<String>,
+}
