@@ -10,7 +10,7 @@ use axum::{
 use axum_validated_extractors::ValidatedJson;
 use bcrypt::{BcryptError, BcryptResult, DEFAULT_COST, hash, verify};
 use chrono::Local;
-use diesel::prelude::*;
+use diesel::{prelude::*, update};
 use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
@@ -97,7 +97,7 @@ pub async fn update_user_email_or_password(
     State(pool): State<Pool>,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateUserPayload>,
-) -> Result<Json<SafeUser>, (StatusCode, String)> {
+) -> Result<Json<User>, (StatusCode, String)> {
     use axum_shop::schema::users;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
@@ -109,29 +109,76 @@ pub async fn update_user_email_or_password(
         .await
         .map_err(internal_error)?;
 
-    println!("found user: {:?}", user.password_hash);
+    if payload.email.is_none() && payload.new_password.is_none() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "At least one field to update must be provided".to_string(),
+        ));
+    }
 
+    if payload.new_password.is_some() && payload.current_password.is_none() {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            "Current password is required to update password".to_string(),
+        ));
+    }
+
+    let mut is_valid = false;
     if let Some(pass) = &payload.current_password {
-        match verify(pass, user.password_hash.as_str()) {
-            Ok(_) => println!("password matches!"),
-            Err(_) => {
-                println!("password  not matches!!!");
+        is_valid = validate_passowrd(pass.to_owned(), user.password_hash).await?;
+    };
+
+    let mut new_hash: Option<String> = None;
+    if let Some(pass) = &payload.current_password {
+        match is_valid {
+            true => {
+                new_hash =
+                    Some(create_password_hash(payload.new_password.unwrap().to_owned()).await?)
+            }
+            false => {
                 return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to validate password".to_string(),
+                    "Password is invalid".to_string(),
                 ));
             }
-        };
+        }
+        // !TODO add tokio::task::spawn_blocking
+        // match verify(pass, &user.password_hash.as_str()) {
+        //     Ok(_) => {
+        //         println!("password matches!");
+        //
+        //         match &payload.new_password {
+        //             Some(new_pass) => {
+        //                 println!("new password: {}", new_pass);
+        //                 new_hash = Some(create_password_hash(new_pass.to_owned()).await?)
+        //             }
+        //             None => {
+        //                 return Err((
+        //                     StatusCode::INTERNAL_SERVER_ERROR,
+        //                     "There is no new password provided".to_string(),
+        //                 ));
+        //             }
+        //         }
+        //     }
+        //     Err(_) => {
+        //         return Err((
+        //             StatusCode::INTERNAL_SERVER_ERROR,
+        //             "Failed to validate password".to_string(),
+        //         ));
+        //     }
+        // };
     };
 
     let updated_user = UpdateUser {
         email: payload.email,
-        password_hash: todo!(),
+        password_hash: new_hash,
     };
+
+    println!("updated user: {:?}", updated_user);
 
     let res = diesel::update(users::table.find(&id))
         .set(&updated_user)
-        .returning(SafeUser::as_returning())
+        .returning(User::as_returning())
         .get_result(&mut conn)
         .await
         .map_err(internal_error)?;
@@ -141,13 +188,13 @@ pub async fn update_user_email_or_password(
 
 pub async fn get_all_users(
     State(pool): State<Pool>,
-) -> Result<Json<Vec<SafeUser>>, (StatusCode, String)> {
+) -> Result<Json<Vec<User>>, (StatusCode, String)> {
     use axum_shop::schema::users;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
     let res = users::table
-        .select(SafeUser::as_select())
+        .select(User::as_select())
         .load(&mut conn)
         .await
         .map_err(internal_error)?;
@@ -172,4 +219,23 @@ async fn create_password_hash(password: String) -> Result<String, (StatusCode, S
         })?;
 
     Ok(hashed_password)
+}
+
+async fn validate_passowrd(password: String, hash: String) -> Result<bool, (StatusCode, String)> {
+    let is_valid = tokio::task::spawn_blocking(move || verify(password, hash.as_str()))
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Verifying task failed: {}", e),
+            )
+        })?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Verifying error: {}", e),
+            )
+        })?;
+
+    Ok(is_valid)
 }
