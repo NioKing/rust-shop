@@ -123,18 +123,16 @@ pub async fn update_user_email_or_password(
         ));
     }
 
-    let mut is_valid = false;
-    if let Some(pass) = &payload.current_password {
-        is_valid = validate_passowrd(pass.to_owned(), user.password_hash).await?;
-    };
+    // let mut is_valid = false;
+    // if let Some(pass) = &payload.current_password {
+    //     is_valid = validate_password(pass.to_owned(), user.password_hash).await?;
+    // };
 
     let mut new_hash: Option<String> = None;
-    if let Some(pass) = &payload.current_password {
-        match is_valid {
-            true => {
-                new_hash =
-                    Some(create_password_hash(payload.new_password.unwrap().to_owned()).await?)
-            }
+
+    if let (Some(cur), Some(new)) = (payload.current_password, payload.new_password) {
+        match validate_password(cur, user.password_hash).await? {
+            true => new_hash = Some(create_password_hash(new).await?),
             false => {
                 return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -142,31 +140,6 @@ pub async fn update_user_email_or_password(
                 ));
             }
         }
-        // !TODO add tokio::task::spawn_blocking
-        // match verify(pass, &user.password_hash.as_str()) {
-        //     Ok(_) => {
-        //         println!("password matches!");
-        //
-        //         match &payload.new_password {
-        //             Some(new_pass) => {
-        //                 println!("new password: {}", new_pass);
-        //                 new_hash = Some(create_password_hash(new_pass.to_owned()).await?)
-        //             }
-        //             None => {
-        //                 return Err((
-        //                     StatusCode::INTERNAL_SERVER_ERROR,
-        //                     "There is no new password provided".to_string(),
-        //                 ));
-        //             }
-        //         }
-        //     }
-        //     Err(_) => {
-        //         return Err((
-        //             StatusCode::INTERNAL_SERVER_ERROR,
-        //             "Failed to validate password".to_string(),
-        //         ));
-        //     }
-        // };
     };
 
     let updated_user = UpdateUser {
@@ -221,7 +194,7 @@ async fn create_password_hash(password: String) -> Result<String, (StatusCode, S
     Ok(hashed_password)
 }
 
-async fn validate_passowrd(password: String, hash: String) -> Result<bool, (StatusCode, String)> {
+async fn validate_password(password: String, hash: String) -> Result<bool, (StatusCode, String)> {
     let is_valid = tokio::task::spawn_blocking(move || verify(password, hash.as_str()))
         .await
         .map_err(|e| {
