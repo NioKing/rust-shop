@@ -12,6 +12,7 @@ use bcrypt::{BcryptError, BcryptResult, DEFAULT_COST, hash, verify};
 use chrono::Local;
 use diesel::{prelude::*, update};
 use diesel_async::RunQueryDsl;
+use std::time::Instant;
 use uuid::Uuid;
 
 pub async fn create_user(
@@ -99,7 +100,7 @@ pub async fn update_user_email_or_password(
     Json(payload): Json<UpdateUserPayload>,
 ) -> Result<Json<User>, (StatusCode, String)> {
     use axum_shop::schema::users;
-
+    let now = Instant::now();
     let mut conn = pool.get().await.map_err(internal_error)?;
 
     let user = users::table
@@ -131,14 +132,19 @@ pub async fn update_user_email_or_password(
     let mut new_hash: Option<String> = None;
 
     if let (Some(cur), Some(new)) = (payload.current_password, payload.new_password) {
-        match validate_password(cur, user.password_hash).await? {
-            true => new_hash = Some(create_password_hash(new).await?),
-            false => {
-                return Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Password is invalid".to_string(),
-                ));
-            }
+        // match validate_password(cur, user.password_hash).await? {
+        //     true => new_hash = Some(create_password_hash(new).await?),
+        //     false => {
+        //         return Err((
+        //             StatusCode::INTERNAL_SERVER_ERROR,
+        //             "Password is invalid".to_string(),
+        //         ));
+        //     }
+        // }
+        new_hash = Some(create_password_hash(new).await?);
+
+        if !validate_password(cur, user.password_hash).await? {
+            return Err((StatusCode::UNAUTHORIZED, "Invalid password".into()));
         }
     };
 
@@ -156,6 +162,7 @@ pub async fn update_user_email_or_password(
         .await
         .map_err(internal_error)?;
 
+    println!("Time: {:.2?}", now.elapsed());
     Ok(Json(res))
 }
 
@@ -195,7 +202,7 @@ async fn create_password_hash(password: String) -> Result<String, (StatusCode, S
 }
 
 async fn validate_password(password: String, hash: String) -> Result<bool, (StatusCode, String)> {
-    let is_valid = tokio::task::spawn_blocking(move || verify(password, hash.as_str()))
+    let is_valid = tokio::task::spawn_blocking(move || verify(password, &hash))
         .await
         .map_err(|e| {
             (
