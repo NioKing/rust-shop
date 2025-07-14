@@ -98,7 +98,7 @@ pub async fn update_user_email_or_password(
     State(pool): State<Pool>,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateUserPayload>,
-) -> Result<Json<User>, (StatusCode, String)> {
+) -> Result<Json<SafeUser>, (StatusCode, String)> {
     use axum_shop::schema::users;
     let now = Instant::now();
     let mut conn = pool.get().await.map_err(internal_error)?;
@@ -157,7 +157,7 @@ pub async fn update_user_email_or_password(
 
     let res = diesel::update(users::table.find(&id))
         .set(&updated_user)
-        .returning(User::as_returning())
+        .returning(SafeUser::as_returning())
         .get_result(&mut conn)
         .await
         .map_err(internal_error)?;
