@@ -94,6 +94,29 @@ pub async fn get_user_by_email(
     Ok(Json(res))
 }
 
+pub async fn delete_user(
+    State(pool): State<Pool>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<SafeUser>, (StatusCode, String)> {
+    use axum_shop::schema::carts;
+    use axum_shop::schema::users;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    diesel::delete(carts::table.filter(carts::user_id.eq(&id)))
+        .execute(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    let res = diesel::delete(users::table.find(&id))
+        .returning(SafeUser::as_returning())
+        .get_result(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
+}
+
 pub async fn update_user_email_or_password(
     State(pool): State<Pool>,
     Path(id): Path<Uuid>,
