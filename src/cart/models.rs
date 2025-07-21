@@ -4,7 +4,7 @@ use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Queryable, Selectable, Debug, PartialEq, Identifiable, Serialize)]
+#[derive(Queryable, Selectable, Identifiable, Serialize)]
 #[diesel(table_name=carts)]
 #[diesel(belongs_to(User))]
 #[diesel(check_for_backend(diesel::pg::Pg))]

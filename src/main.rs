@@ -74,7 +74,8 @@ async fn main() {
         .route(
             "/users/{id}",
             patch(auth::handlers::update_user_email_or_password)
-                .get(auth::handlers::get_user_by_id),
+                .get(auth::handlers::get_user_by_id)
+                .delete(auth::handlers::delete_user),
         )
         .route("/carts", get(cart::handlers::get_all_cart))
         .layer(middleware::from_fn(utils::print_req_res))

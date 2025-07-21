@@ -1,5 +1,4 @@
 use axum::{
-    Router,
     body::{Body, Bytes},
     extract::Request,
     http::StatusCode,
