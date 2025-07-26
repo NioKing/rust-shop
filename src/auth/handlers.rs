@@ -1,17 +1,28 @@
 #![allow(dead_code, unused)]
-use super::models::{NewUser, SafeUser, UpdateUser, UpdateUserPayload, User, UserEmail};
-use crate::cart::models::NewCart;
+use super::models::{LoginUser, NewUser, SafeUser, UpdateUser, UpdateUserPayload, User, UserEmail};
+use crate::auth::models::{AuthError, NewRefreshToken, Tokens};
 use crate::utils::internal_error;
 use crate::utils::types::Pool;
+use crate::{auth::models::Claims, cart::models::NewCart};
+use axum::RequestPartsExt;
+use axum::extract::FromRequestParts;
+use axum::http::HeaderMap;
+use axum::http::request::Parts;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
+    response::IntoResponse,
 };
+use axum_extra::TypedHeader;
+use axum_extra::headers::Authorization;
+use axum_extra::headers::authorization::Bearer;
 use axum_validated_extractors::ValidatedJson;
 use bcrypt::{BcryptError, BcryptResult, DEFAULT_COST, hash, verify};
-use chrono::Local;
+use chrono::{Duration, Local, Utc};
 use diesel::{prelude::*, update};
 use diesel_async::RunQueryDsl;
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
+use std::env;
 use std::time::Instant;
 use uuid::Uuid;
 
@@ -205,21 +216,167 @@ pub async fn get_all_users(
     Ok(Json(res))
 }
 
+pub async fn login_user(
+    State(pool): State<Pool>,
+    Json(payload): Json<LoginUser>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    use axum_shop::schema::users;
+    dotenv::dotenv().ok();
+    let now = Instant::now();
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let user = users::table
+        .filter(users::email.eq(payload.email))
+        .first::<User>(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    if !validate_password(payload.password, user.password_hash).await? {
+        return Err((StatusCode::UNAUTHORIZED, "Invalid password".into()));
+    }
+
+    let access_exprires = Utc::now() + Duration::minutes(5);
+    let access_claims = Claims {
+        sub: user.id.to_string().clone(),
+        email: user.email.clone(),
+        exp: access_exprires.timestamp() as usize,
+    };
+
+    let at_secret = env::var("AT_SECRET").unwrap();
+    let rt_secret = env::var("RT_SECRET").unwrap();
+
+    let refresh_expires = Utc::now() + Duration::days(7);
+    let refresh_claims = Claims {
+        sub: user.id.to_string().clone(),
+        email: user.email.clone(),
+        exp: refresh_expires.timestamp() as usize,
+    };
+
+    let (access_token, refresh_token) = tokio::try_join!(
+        encode_token(access_claims, &at_secret),
+        encode_token(refresh_claims, &rt_secret),
+    )?;
+
+    let refresh_token_hash = create_password_hash(refresh_token.clone()).await?;
+
+    diesel::update(users::table.filter(users::id.eq(user.id)))
+        .set(users::hashed_rt.eq(&refresh_token_hash))
+        .execute(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    let cookie_value = format!(
+        "refresh_token={}; HttpOnly; Max-Age={}; Secure; Path=/auth/refresh; SameSite=Strict",
+        refresh_token,
+        7 * 24 * 60 * 60
+    );
+
+    let mut headers = HeaderMap::new();
+    headers.insert("Set-Cookie", cookie_value.parse().unwrap());
+
+    let tokens = Tokens {
+        access_token,
+        refresh_token,
+    };
+
+    println!("Time: {:.2?}", now.elapsed());
+    Ok((headers, Json(tokens)))
+}
+
+impl<S> FromRequestParts<S> for Claims
+where
+    S: Send + Sync,
+{
+    type Rejection = AuthError;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        dotenv::dotenv().ok();
+        let secret = env::var("AT_SECRET").unwrap();
+
+        let TypedHeader(Authorization(bearer)) = parts
+            .extract::<TypedHeader<Authorization<Bearer>>>()
+            .await
+            .map_err(|_| AuthError::InvalidToken)?;
+        // Decode the user data
+        let token_data = decode::<Claims>(
+            bearer.token(),
+            &DecodingKey::from_secret(secret.as_bytes()),
+            &Validation::default(),
+        )
+        .map_err(|_| AuthError::InvalidToken)?;
+
+        // let token_data = decode_token(bearer.token(), &secret).await?;
+
+        println!("Token data: {:?}", token_data);
+
+        Ok(token_data.claims)
+    }
+}
+
+async fn encode_token(claims: Claims, secret: &String) -> Result<String, (StatusCode, String)> {
+    let token = tokio::task::spawn_blocking({
+        // let claims = claims.clone();
+        let secret = secret.clone();
+        move || {
+            let refresh_token = encode(
+                &Header::default(),
+                &claims,
+                &EncodingKey::from_secret(secret.as_bytes()),
+            );
+
+            refresh_token
+        }
+    })
+    .await
+    .map_err(internal_error)?
+    .map_err(internal_error)?;
+
+    Ok(token)
+}
+
+pub async fn logout(State(pool): State<Pool>, claims: Claims) -> Result<(), (StatusCode, String)> {
+    use axum_shop::schema::users;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+    let id = Uuid::parse_str(&claims.sub).unwrap();
+
+    diesel::update(users::table.filter(users::id.eq(id)))
+        .set(users::hashed_rt.eq(None::<String>))
+        .execute(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(())
+}
+
+async fn decode_token(
+    token: String,
+    secret: &String,
+) -> Result<TokenData<Claims>, (StatusCode, String)> {
+    let data = tokio::task::spawn_blocking({
+        let secret = secret.clone();
+        let token = token.clone();
+
+        move || {
+            decode::<Claims>(
+                &token,
+                &DecodingKey::from_secret(secret.as_bytes()),
+                &Validation::default(),
+            )
+        }
+    })
+    .await
+    .map_err(internal_error)?
+    .map_err(internal_error)?;
+
+    Ok(data)
+}
+
 async fn create_password_hash(password: String) -> Result<String, (StatusCode, String)> {
     let hashed_password = tokio::task::spawn_blocking(move || hash(password, DEFAULT_COST))
         .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Hashing task failed: {}", e),
-            )
-        })?
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Hashing error: {}", e),
-            )
-        })?;
+        .map_err(internal_error)?
+        .map_err(internal_error)?;
 
     Ok(hashed_password)
 }
@@ -227,18 +384,8 @@ async fn create_password_hash(password: String) -> Result<String, (StatusCode, S
 async fn validate_password(password: String, hash: String) -> Result<bool, (StatusCode, String)> {
     let is_valid = tokio::task::spawn_blocking(move || verify(password, &hash))
         .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Verifying task failed: {}", e),
-            )
-        })?
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Verifying error: {}", e),
-            )
-        })?;
+        .map_err(internal_error)?
+        .map_err(internal_error)?;
 
     Ok(is_valid)
 }

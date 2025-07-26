@@ -1,9 +1,18 @@
+use axum::{
+    Json, RequestPartsExt,
+    extract::FromRequestParts,
+    http::{StatusCode, request::Parts},
+    response::{IntoResponse, Response},
+};
 use axum_shop::schema::users;
 use diesel::prelude::*;
+use jsonwebtoken::{DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::env;
 use validator::Validate;
 
-#[derive(Queryable, Selectable, Debug, Serialize, Insertable)]
+#[derive(Queryable, Selectable, Debug, Serialize, Insertable, AsChangeset)]
 #[diesel(table_name=users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
@@ -53,4 +62,59 @@ pub struct UpdateUserPayload {
     pub current_password: Option<String>,
     #[validate(length(min = 6, message = "Your password should be at least 6 symbols long"))]
     pub new_password: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Validate)]
+pub struct LoginUser {
+    #[validate(email)]
+    pub email: String,
+    pub password: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Claims {
+    pub sub: String,
+    pub email: String,
+    pub exp: usize,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct AccessToken {
+    pub access_token: String,
+}
+
+#[derive(Serialize, Debug)]
+pub struct NewRefreshToken<'a> {
+    pub user_id: &'a uuid::Uuid,
+    pub token_hash: &'a String,
+    pub expires_at: chrono::NaiveDateTime,
+}
+
+#[derive(Serialize, Debug)]
+pub struct Tokens {
+    pub access_token: String,
+    pub refresh_token: String,
+}
+
+#[derive(Debug)]
+pub enum AuthError {
+    WrongCredentials,
+    MissingCredentials,
+    TokenCreation,
+    InvalidToken,
+}
+
+impl IntoResponse for AuthError {
+    fn into_response(self) -> Response {
+        let (status, error_message) = match self {
+            AuthError::WrongCredentials => (StatusCode::UNAUTHORIZED, "Wrong credentials"),
+            AuthError::MissingCredentials => (StatusCode::BAD_REQUEST, "Missing credentials"),
+            AuthError::TokenCreation => (StatusCode::INTERNAL_SERVER_ERROR, "Token creation error"),
+            AuthError::InvalidToken => (StatusCode::BAD_REQUEST, "Invalid token"),
+        };
+        let body = Json(json!({
+            "error": error_message,
+        }));
+        (status, body).into_response()
+    }
 }
