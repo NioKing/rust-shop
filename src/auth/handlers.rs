@@ -216,7 +216,6 @@ pub async fn login_user(
     Json(payload): Json<LoginUser>,
 ) -> Result<Json<Tokens>, (StatusCode, String)> {
     use axum_shop::schema::users;
-    // dotenv::dotenv().ok();
     let now = Instant::now();
     let mut conn = pool.get().await.map_err(internal_error)?;
 
@@ -230,27 +229,13 @@ pub async fn login_user(
         return Err((StatusCode::UNAUTHORIZED, "Invalid password".to_owned()));
     }
 
-    let access_exprires = Utc::now() + Duration::minutes(5);
-    let access_claims = AccessTokenClaims {
-        sub: user.id.to_string().clone(),
-        email: user.email.clone(),
-        exp: access_exprires.timestamp() as usize,
-    };
-
-    let at_secret = env::var("AT_SECRET").expect("Access token secret must be set");
-    let rt_secret = env::var("RT_SECRET").expect("Refresh token secret must be set");
-
-    let refresh_expires = Utc::now() + Duration::days(7);
-    let refresh_claims = RefreshTokenClaims {
-        sub: user.id.to_string().clone(),
-        // email: user.email.clone(),
-        exp: refresh_expires.timestamp() as usize,
-    };
-
-    let (access_token, refresh_token) = tokio::try_join!(
-        encode_token(access_claims, &at_secret),
-        encode_token(refresh_claims, &rt_secret),
-    )?;
+    let (access_token, refresh_token) = create_tokens_pair(
+        Duration::minutes(5),
+        Duration::days(7),
+        &user.id.to_string(),
+        &user.email,
+    )
+    .await?;
 
     let refresh_token_hash = create_hash(refresh_token.clone()).await?;
 
@@ -309,29 +294,13 @@ pub async fn refresh_token(
         ));
     };
 
-    println!("user: {:?}", user);
-
-    let access_exprires = Utc::now() + Duration::minutes(5);
-    let access_claims = AccessTokenClaims {
-        sub: user.id.to_string().clone(),
-        email: user.email.clone(),
-        exp: access_exprires.timestamp() as usize,
-    };
-
-    let at_secret = env::var("AT_SECRET").expect("Access token secret must be set");
-    let rt_secret = env::var("RT_SECRET").expect("Refresh token secret must be set");
-
-    let refresh_expires = Utc::now() + Duration::days(7);
-    let refresh_claims = RefreshTokenClaims {
-        sub: user.id.to_string().clone(),
-        // email: user.email.clone(),
-        exp: refresh_expires.timestamp() as usize,
-    };
-
-    let (access_token, refresh_token) = tokio::try_join!(
-        encode_token(access_claims, &at_secret),
-        encode_token(refresh_claims, &rt_secret),
-    )?;
+    let (access_token, refresh_token) = create_tokens_pair(
+        Duration::minutes(5),
+        Duration::days(7),
+        &user.id.to_string(),
+        &user.email,
+    )
+    .await?;
 
     let refresh_token_hash = create_hash(refresh_token.clone()).await?;
 
@@ -347,6 +316,46 @@ pub async fn refresh_token(
     };
 
     Ok(Json(tokens))
+}
+
+async fn create_tokens_pair(
+    access_duration: Duration,
+    refresh_duration: Duration,
+    id: &str,
+    email: &str,
+) -> Result<(String, String), (StatusCode, String)> {
+    let access_exprires = Utc::now() + access_duration;
+    let access_claims = AccessTokenClaims {
+        sub: id.to_owned(),
+        email: email.to_owned(),
+        exp: access_exprires.timestamp() as usize,
+    };
+
+    let refresh_expires = Utc::now() + refresh_duration;
+    let refresh_claims = RefreshTokenClaims {
+        sub: id.to_owned(),
+        exp: refresh_expires.timestamp() as usize,
+    };
+
+    let at_secret = env::var("AT_SECRET").map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "AT_SECRET not set".to_owned(),
+        )
+    })?;
+    let rt_secret = env::var("RT_SECRET").map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "RT_SECRET not set".to_owned(),
+        )
+    })?;
+
+    let (access_token, refresh_token) = tokio::try_join!(
+        encode_token(access_claims, &at_secret),
+        encode_token(refresh_claims, &rt_secret),
+    )?;
+
+    Ok((access_token, refresh_token))
 }
 
 impl<S> FromRequestParts<S> for AccessTokenClaims
