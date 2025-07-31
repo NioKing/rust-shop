@@ -39,7 +39,7 @@ pub async fn create_user(
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let hashed_pass = create_password_hash(payload.password_hash).await?;
+    let hashed_pass = create_hash(payload.password_hash).await?;
 
     let user_id = Uuid::new_v4();
 
@@ -170,18 +170,9 @@ pub async fn update_user_email_or_password(
     let mut new_hash: Option<String> = None;
 
     if let (Some(cur), Some(new)) = (payload.current_password, payload.new_password) {
-        // match validate_password(cur, user.password_hash).await? {
-        //     true => new_hash = Some(create_password_hash(new).await?),
-        //     false => {
-        //         return Err((
-        //             StatusCode::INTERNAL_SERVER_ERROR,
-        //             "Password is invalid".to_string(),
-        //         ));
-        //     }
-        // }
-        new_hash = Some(create_password_hash(new).await?);
+        new_hash = Some(create_hash(new).await?);
 
-        if !validate_password(cur, user.password_hash).await? {
+        if !validate_hash(cur, user.password_hash).await? {
             return Err((StatusCode::UNAUTHORIZED, "Invalid password".into()));
         }
     };
@@ -235,8 +226,8 @@ pub async fn login_user(
         .await
         .map_err(internal_error)?;
 
-    if !validate_password(payload.password, user.password_hash).await? {
-        return Err((StatusCode::UNAUTHORIZED, "Invalid password".into()));
+    if !validate_hash(payload.password, user.password_hash).await? {
+        return Err((StatusCode::UNAUTHORIZED, "Invalid password".to_owned()));
     }
 
     let access_exprires = Utc::now() + Duration::minutes(5);
@@ -246,8 +237,8 @@ pub async fn login_user(
         exp: access_exprires.timestamp() as usize,
     };
 
-    let at_secret = env::var("AT_SECRET").unwrap();
-    let rt_secret = env::var("RT_SECRET").unwrap();
+    let at_secret = env::var("AT_SECRET").expect("Access token secret must be set");
+    let rt_secret = env::var("RT_SECRET").expect("Refresh token secret must be set");
 
     let refresh_expires = Utc::now() + Duration::days(7);
     let refresh_claims = RefreshTokenClaims {
@@ -261,7 +252,7 @@ pub async fn login_user(
         encode_token(refresh_claims, &rt_secret),
     )?;
 
-    let refresh_token_hash = create_password_hash(refresh_token.clone()).await?;
+    let refresh_token_hash = create_hash(refresh_token.clone()).await?;
 
     diesel::update(users::table.filter(users::id.eq(user.id)))
         .set(users::hashed_rt.eq(&refresh_token_hash))
@@ -292,7 +283,7 @@ pub async fn refresh_token(
     State(pool): State<Pool>,
     claims: RefreshTokenClaims,
     bearer: TypedHeader<Authorization<Bearer>>,
-) -> Result<Json<AccessToken>, (StatusCode, String)> {
+) -> Result<Json<Tokens>, (StatusCode, String)> {
     use axum_shop::schema::users;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
@@ -308,13 +299,54 @@ pub async fn refresh_token(
         .await
         .map_err(internal_error)?;
 
-    // validate_password(token.to_string(), Some(user.hashed_rt).unwrap()).await?;
+    if let Some(hash) = &user.hashed_rt {
+        validate_hash(token.to_owned(), hash.to_owned()).await?;
+        println!("is valid");
+    } else {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            "Please, use login instead".to_owned(),
+        ));
+    };
+
     println!("user: {:?}", user);
 
-    let token = AccessToken {
-        access_token: "sometoken".to_string(),
+    let access_exprires = Utc::now() + Duration::minutes(5);
+    let access_claims = AccessTokenClaims {
+        sub: user.id.to_string().clone(),
+        email: user.email.clone(),
+        exp: access_exprires.timestamp() as usize,
     };
-    Ok(Json(token))
+
+    let at_secret = env::var("AT_SECRET").expect("Access token secret must be set");
+    let rt_secret = env::var("RT_SECRET").expect("Refresh token secret must be set");
+
+    let refresh_expires = Utc::now() + Duration::days(7);
+    let refresh_claims = RefreshTokenClaims {
+        sub: user.id.to_string().clone(),
+        // email: user.email.clone(),
+        exp: refresh_expires.timestamp() as usize,
+    };
+
+    let (access_token, refresh_token) = tokio::try_join!(
+        encode_token(access_claims, &at_secret),
+        encode_token(refresh_claims, &rt_secret),
+    )?;
+
+    let refresh_token_hash = create_hash(refresh_token.clone()).await?;
+
+    diesel::update(users::table.filter(users::id.eq(user.id)))
+        .set(users::hashed_rt.eq(&refresh_token_hash))
+        .execute(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    let tokens = Tokens {
+        access_token,
+        refresh_token,
+    };
+
+    Ok(Json(tokens))
 }
 
 impl<S> FromRequestParts<S> for AccessTokenClaims
@@ -436,7 +468,7 @@ async fn decode_token<T: Send + DeserializeOwned + 'static>(
     Ok(data)
 }
 
-async fn create_password_hash(password: String) -> Result<String, (StatusCode, String)> {
+async fn create_hash(password: String) -> Result<String, (StatusCode, String)> {
     let hashed_password = tokio::task::spawn_blocking(move || hash(password, DEFAULT_COST))
         .await
         .map_err(internal_error)?
@@ -445,7 +477,7 @@ async fn create_password_hash(password: String) -> Result<String, (StatusCode, S
     Ok(hashed_password)
 }
 
-async fn validate_password(password: String, hash: String) -> Result<bool, (StatusCode, String)> {
+async fn validate_hash(password: String, hash: String) -> Result<bool, (StatusCode, String)> {
     let is_valid = tokio::task::spawn_blocking(move || verify(password, &hash))
         .await
         .map_err(internal_error)?
