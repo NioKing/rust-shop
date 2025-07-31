@@ -1,9 +1,11 @@
 #![allow(dead_code, unused)]
-use super::models::{LoginUser, NewUser, SafeUser, UpdateUser, UpdateUserPayload, User, UserEmail};
-use crate::auth::models::{AuthError, NewRefreshToken, Tokens};
+use super::models::{
+    AccessTokenClaims, LoginUser, NewUser, SafeUser, UpdateUser, UpdateUserPayload, User, UserEmail,
+};
+use crate::auth::models::{AccessToken, AuthError, NewRefreshToken, RefreshTokenClaims, Tokens};
+use crate::cart::models::NewCart;
 use crate::utils::internal_error;
 use crate::utils::types::Pool;
-use crate::{auth::models::Claims, cart::models::NewCart};
 use axum::RequestPartsExt;
 use axum::extract::FromRequestParts;
 use axum::http::HeaderMap;
@@ -22,6 +24,8 @@ use chrono::{Duration, Local, Utc};
 use diesel::{prelude::*, update};
 use diesel_async::RunQueryDsl;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::env;
 use std::time::Instant;
 use uuid::Uuid;
@@ -219,9 +223,9 @@ pub async fn get_all_users(
 pub async fn login_user(
     State(pool): State<Pool>,
     Json(payload): Json<LoginUser>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<Json<Tokens>, (StatusCode, String)> {
     use axum_shop::schema::users;
-    dotenv::dotenv().ok();
+    // dotenv::dotenv().ok();
     let now = Instant::now();
     let mut conn = pool.get().await.map_err(internal_error)?;
 
@@ -236,7 +240,7 @@ pub async fn login_user(
     }
 
     let access_exprires = Utc::now() + Duration::minutes(5);
-    let access_claims = Claims {
+    let access_claims = AccessTokenClaims {
         sub: user.id.to_string().clone(),
         email: user.email.clone(),
         exp: access_exprires.timestamp() as usize,
@@ -246,9 +250,9 @@ pub async fn login_user(
     let rt_secret = env::var("RT_SECRET").unwrap();
 
     let refresh_expires = Utc::now() + Duration::days(7);
-    let refresh_claims = Claims {
+    let refresh_claims = RefreshTokenClaims {
         sub: user.id.to_string().clone(),
-        email: user.email.clone(),
+        // email: user.email.clone(),
         exp: refresh_expires.timestamp() as usize,
     };
 
@@ -265,14 +269,14 @@ pub async fn login_user(
         .await
         .map_err(internal_error)?;
 
-    let cookie_value = format!(
-        "refresh_token={}; HttpOnly; Max-Age={}; Secure; Path=/auth/refresh; SameSite=Strict",
-        refresh_token,
-        7 * 24 * 60 * 60
-    );
+    // let cookie_value = format!(
+    //     "refresh_token={}; HttpOnly; Max-Age={}; Secure; Path=/auth/refresh; SameSite=Strict",
+    //     refresh_token,
+    //     7 * 24 * 60 * 60
+    // );
 
-    let mut headers = HeaderMap::new();
-    headers.insert("Set-Cookie", cookie_value.parse().unwrap());
+    // let mut headers = HeaderMap::new();
+    // headers.insert("Set-Cookie", cookie_value.parse().unwrap());
 
     let tokens = Tokens {
         access_token,
@@ -280,32 +284,60 @@ pub async fn login_user(
     };
 
     println!("Time: {:.2?}", now.elapsed());
-    Ok((headers, Json(tokens)))
+
+    Ok(Json(tokens))
 }
 
-impl<S> FromRequestParts<S> for Claims
+pub async fn refresh_token(
+    State(pool): State<Pool>,
+    claims: RefreshTokenClaims,
+    bearer: TypedHeader<Authorization<Bearer>>,
+) -> Result<Json<AccessToken>, (StatusCode, String)> {
+    use axum_shop::schema::users;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let token = bearer.token();
+
+    let id = Uuid::parse_str(&claims.sub).unwrap();
+
+    let user = users::table
+        .find(&id)
+        .select(User::as_select())
+        .get_result(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    // validate_password(token.to_string(), Some(user.hashed_rt).unwrap()).await?;
+    println!("user: {:?}", user);
+
+    let token = AccessToken {
+        access_token: "sometoken".to_string(),
+    };
+    Ok(Json(token))
+}
+
+impl<S> FromRequestParts<S> for AccessTokenClaims
 where
     S: Send + Sync,
 {
     type Rejection = AuthError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        dotenv::dotenv().ok();
-        let secret = env::var("AT_SECRET").unwrap();
+        // let path = parts.uri.path().split('/').last().unwrap();
+
+        // let secret = match path {
+        //     "refresh" => env::var("RT_SECRET").expect("RT_SECRET missing"),
+        //     _ => env::var("AT_SECRET").expect("AT_SECRET missing"),
+        // };
 
         let TypedHeader(Authorization(bearer)) = parts
             .extract::<TypedHeader<Authorization<Bearer>>>()
             .await
             .map_err(|_| AuthError::InvalidToken)?;
-        // Decode the user data
-        let token_data = decode::<Claims>(
-            bearer.token(),
-            &DecodingKey::from_secret(secret.as_bytes()),
-            &Validation::default(),
-        )
-        .map_err(|_| AuthError::InvalidToken)?;
 
-        // let token_data = decode_token(bearer.token(), &secret).await?;
+        let secret = env::var("AT_SECRET").expect("AT_SECRET missing");
+        let token_data = decode_token(&bearer.token(), &secret).await?;
 
         println!("Token data: {:?}", token_data);
 
@@ -313,7 +345,38 @@ where
     }
 }
 
-async fn encode_token(claims: Claims, secret: &String) -> Result<String, (StatusCode, String)> {
+impl<S> FromRequestParts<S> for RefreshTokenClaims
+where
+    S: Send + Sync,
+{
+    type Rejection = AuthError;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        // let path = parts.uri.path().split('/').last().unwrap();
+        //
+        // let secret = match path {
+        //     "refresh" => env::var("RT_SECRET").expect("RT_SECRET missing"),
+        //     _ => env::var("AT_SECRET").expect("AT_SECRET missing"),
+        // };
+
+        let TypedHeader(Authorization(bearer)) = parts
+            .extract::<TypedHeader<Authorization<Bearer>>>()
+            .await
+            .map_err(|_| AuthError::InvalidToken)?;
+
+        let secret = env::var("RT_SECRET").expect("RT_SECRET missing");
+        let token_data = decode_token(&bearer.token(), &secret).await?;
+
+        println!("Token data: {:?}", token_data);
+
+        Ok(token_data.claims)
+    }
+}
+
+async fn encode_token<T: Sync + DeserializeOwned + 'static + Serialize + Send>(
+    claims: T,
+    secret: &String,
+) -> Result<String, (StatusCode, String)> {
     let token = tokio::task::spawn_blocking({
         // let claims = claims.clone();
         let secret = secret.clone();
@@ -334,7 +397,10 @@ async fn encode_token(claims: Claims, secret: &String) -> Result<String, (Status
     Ok(token)
 }
 
-pub async fn logout(State(pool): State<Pool>, claims: Claims) -> Result<(), (StatusCode, String)> {
+pub async fn logout(
+    State(pool): State<Pool>,
+    claims: AccessTokenClaims,
+) -> Result<(), (StatusCode, String)> {
     use axum_shop::schema::users;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
@@ -349,25 +415,23 @@ pub async fn logout(State(pool): State<Pool>, claims: Claims) -> Result<(), (Sta
     Ok(())
 }
 
-async fn decode_token(
-    token: String,
-    secret: &String,
-) -> Result<TokenData<Claims>, (StatusCode, String)> {
-    let data = tokio::task::spawn_blocking({
-        let secret = secret.clone();
-        let token = token.clone();
+async fn decode_token<T: Send + DeserializeOwned + 'static>(
+    token: &str,
+    secret: &str,
+) -> Result<TokenData<T>, AuthError> {
+    let secret = secret.to_owned();
+    let token = token.to_owned();
 
-        move || {
-            decode::<Claims>(
-                &token,
-                &DecodingKey::from_secret(secret.as_bytes()),
-                &Validation::default(),
-            )
-        }
+    let data = tokio::task::spawn_blocking(move || {
+        decode::<T>(
+            &token,
+            &DecodingKey::from_secret(secret.as_bytes()),
+            &Validation::default(),
+        )
     })
     .await
-    .map_err(internal_error)?
-    .map_err(internal_error)?;
+    .map_err(|_| AuthError::FailedTask)?
+    .map_err(|_| AuthError::InvalidToken)?;
 
     Ok(data)
 }

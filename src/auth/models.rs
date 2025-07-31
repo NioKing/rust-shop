@@ -72,13 +72,19 @@ pub struct LoginUser {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Claims {
+pub struct AccessTokenClaims {
     pub sub: String,
     pub email: String,
     pub exp: usize,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RefreshTokenClaims {
+    pub sub: String,
+    pub exp: usize,
+}
+
+#[derive(Deserialize, Debug, Serialize)]
 pub struct AccessToken {
     pub access_token: String,
 }
@@ -96,25 +102,25 @@ pub struct Tokens {
     pub refresh_token: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum AuthError {
     WrongCredentials,
     MissingCredentials,
     TokenCreation,
     InvalidToken,
+    FailedTask,
 }
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
+            AuthError::FailedTask => (StatusCode::INTERNAL_SERVER_ERROR, "Task has failed"),
             AuthError::WrongCredentials => (StatusCode::UNAUTHORIZED, "Wrong credentials"),
             AuthError::MissingCredentials => (StatusCode::BAD_REQUEST, "Missing credentials"),
             AuthError::TokenCreation => (StatusCode::INTERNAL_SERVER_ERROR, "Token creation error"),
             AuthError::InvalidToken => (StatusCode::BAD_REQUEST, "Invalid token"),
         };
-        let body = Json(json!({
-            "error": error_message,
-        }));
-        (status, body).into_response()
+
+        (status, error_message).into_response()
     }
 }
