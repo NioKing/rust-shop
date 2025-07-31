@@ -1,3 +1,4 @@
+#![allow(unused)]
 mod auth;
 mod cart;
 mod category;
@@ -15,7 +16,7 @@ use diesel_async::{
 };
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use listenfd::ListenFd;
-use std::env;
+use std::{env, rc::Rc, sync::Arc};
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -26,6 +27,7 @@ async fn main() {
     dotenv::dotenv().ok();
 
     let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    // let jwt_secret = env::var("JWT_SECRET").unwrap_or("super-secret-password".to_string());
 
     let config = AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
     let pool = bb8::Pool::builder().build(config).await.unwrap();
@@ -78,6 +80,9 @@ async fn main() {
                 .delete(auth::handlers::delete_user),
         )
         .route("/carts", get(cart::handlers::get_all_cart))
+        .route("/auth/login", post(auth::handlers::login_user))
+        .route("/auth/logout", post(auth::handlers::logout))
+        .route("/auth/refresh", post(auth::handlers::refresh_token))
         .layer(middleware::from_fn(utils::print_req_res))
         .with_state(pool);
 
