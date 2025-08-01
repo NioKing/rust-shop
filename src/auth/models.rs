@@ -109,11 +109,16 @@ pub enum AuthError {
     TokenCreation,
     InvalidToken,
     FailedTask,
+    MissingSecret,
 }
 
 impl IntoResponse for AuthError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
+            AuthError::MissingSecret => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Token secret must be set",
+            ),
             AuthError::FailedTask => (StatusCode::INTERNAL_SERVER_ERROR, "Task has failed"),
             AuthError::WrongCredentials => (StatusCode::UNAUTHORIZED, "Wrong credentials"),
             AuthError::MissingCredentials => (StatusCode::BAD_REQUEST, "Missing credentials"),

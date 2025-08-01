@@ -151,21 +151,16 @@ pub async fn update_user_email_or_password(
     if payload.email.is_none() && payload.new_password.is_none() {
         return Err((
             StatusCode::BAD_REQUEST,
-            "At least one field to update must be provided".to_string(),
+            "At least one field to update must be provided".to_owned(),
         ));
     }
 
     if payload.new_password.is_some() && payload.current_password.is_none() {
         return Err((
             StatusCode::UNAUTHORIZED,
-            "Current password is required to update password".to_string(),
+            "Current password is required to update password".to_owned(),
         ));
     }
-
-    // let mut is_valid = false;
-    // if let Some(pass) = &payload.current_password {
-    //     is_valid = validate_password(pass.to_owned(), user.password_hash).await?;
-    // };
 
     let mut new_hash: Option<String> = None;
 
@@ -173,7 +168,7 @@ pub async fn update_user_email_or_password(
         new_hash = Some(create_hash(new).await?);
 
         if !validate_hash(cur, user.password_hash).await? {
-            return Err((StatusCode::UNAUTHORIZED, "Invalid password".into()));
+            return Err((StatusCode::UNAUTHORIZED, "Invalid password".to_owned()));
         }
     };
 
@@ -365,19 +360,14 @@ where
     type Rejection = AuthError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        // let path = parts.uri.path().split('/').last().unwrap();
-
-        // let secret = match path {
-        //     "refresh" => env::var("RT_SECRET").expect("RT_SECRET missing"),
-        //     _ => env::var("AT_SECRET").expect("AT_SECRET missing"),
-        // };
-
         let TypedHeader(Authorization(bearer)) = parts
             .extract::<TypedHeader<Authorization<Bearer>>>()
             .await
             .map_err(|_| AuthError::InvalidToken)?;
 
-        let secret = env::var("AT_SECRET").expect("AT_SECRET missing");
+        // let secret = env::var("AT_SECRET").expect("AT_SECRET missing");
+        let secret = env::var("AT_SECRET").map_err(|_| AuthError::MissingSecret)?;
+
         let token_data = decode_token(&bearer.token(), &secret).await?;
 
         println!("Token data: {:?}", token_data);
@@ -393,19 +383,14 @@ where
     type Rejection = AuthError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        // let path = parts.uri.path().split('/').last().unwrap();
-        //
-        // let secret = match path {
-        //     "refresh" => env::var("RT_SECRET").expect("RT_SECRET missing"),
-        //     _ => env::var("AT_SECRET").expect("AT_SECRET missing"),
-        // };
-
         let TypedHeader(Authorization(bearer)) = parts
             .extract::<TypedHeader<Authorization<Bearer>>>()
             .await
             .map_err(|_| AuthError::InvalidToken)?;
 
-        let secret = env::var("RT_SECRET").expect("RT_SECRET missing");
+        // let secret = env::var("RT_SECRET").expect("RT_SECRET missing");
+        let secret = env::var("RT_SECRET").map_err(|_| AuthError::MissingSecret)?;
+
         let token_data = decode_token(&bearer.token(), &secret).await?;
 
         println!("Token data: {:?}", token_data);
