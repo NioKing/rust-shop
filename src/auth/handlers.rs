@@ -20,7 +20,7 @@ use axum_extra::headers::Authorization;
 use axum_extra::headers::authorization::Bearer;
 use axum_validated_extractors::ValidatedJson;
 use bcrypt::{BcryptError, BcryptResult, DEFAULT_COST, hash, verify};
-use chrono::{Duration, Local, Utc};
+use chrono::{Duration, Local, TimeZone, Utc};
 use diesel::{prelude::*, update};
 use diesel_async::RunQueryDsl;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
@@ -192,10 +192,20 @@ pub async fn update_user_email_or_password(
 
 pub async fn get_all_users(
     State(pool): State<Pool>,
+    // claims: AccessTokenClaims,
 ) -> Result<Json<Vec<User>>, (StatusCode, String)> {
     use axum_shop::schema::users;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
+
+    // let user_id = Uuid::parse_str(&claims.sub).unwrap();
+    //
+    // let res = users::table
+    //     .filter(users::id.eq(&user_id))
+    //     .select(User::as_select())
+    //     .get_result(&mut conn)
+    //     .await
+    //     .map_err(internal_error)?;
 
     let res = users::table
         .select(User::as_select())
@@ -240,15 +250,6 @@ pub async fn login_user(
         .await
         .map_err(internal_error)?;
 
-    // let cookie_value = format!(
-    //     "refresh_token={}; HttpOnly; Max-Age={}; Secure; Path=/auth/refresh; SameSite=Strict",
-    //     refresh_token,
-    //     7 * 24 * 60 * 60
-    // );
-
-    // let mut headers = HeaderMap::new();
-    // headers.insert("Set-Cookie", cookie_value.parse().unwrap());
-
     let tokens = Tokens {
         access_token,
         refresh_token,
@@ -270,7 +271,7 @@ pub async fn refresh_token(
 
     let token = bearer.token();
 
-    let id = Uuid::parse_str(&claims.sub).unwrap();
+    let id = Uuid::parse_str(&claims.sub).map_err(internal_error)?;
 
     let user = users::table
         .find(&id)
@@ -281,7 +282,6 @@ pub async fn refresh_token(
 
     if let Some(hash) = &user.hashed_rt {
         validate_hash(token.to_owned(), hash.to_owned()).await?;
-        println!("is valid");
     } else {
         return Err((
             StatusCode::UNAUTHORIZED,
@@ -365,7 +365,6 @@ where
             .await
             .map_err(|_| AuthError::InvalidToken)?;
 
-        // let secret = env::var("AT_SECRET").expect("AT_SECRET missing");
         let secret = env::var("AT_SECRET").map_err(|_| AuthError::MissingSecret)?;
 
         let token_data = decode_token(&bearer.token(), &secret).await?;
@@ -388,7 +387,6 @@ where
             .await
             .map_err(|_| AuthError::InvalidToken)?;
 
-        // let secret = env::var("RT_SECRET").expect("RT_SECRET missing");
         let secret = env::var("RT_SECRET").map_err(|_| AuthError::MissingSecret)?;
 
         let token_data = decode_token(&bearer.token(), &secret).await?;
