@@ -10,7 +10,6 @@ use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
 };
-use axum_shop::schema::{categories, product_categories, products};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 
@@ -18,6 +17,8 @@ pub async fn create_product(
     State(pool): State<Pool>,
     Json(payload): Json<NewProduct>,
 ) -> Result<Json<Product>, (StatusCode, String)> {
+    use axum_shop::schema::products;
+
     let mut conn = pool.get().await.map_err(internal_error)?;
 
     let res = diesel::insert_into(products::table)
@@ -34,6 +35,8 @@ pub async fn create_product_with_categories(
     State(pool): State<Pool>,
     Json(payload): Json<CreateProductWithCategories>,
 ) -> Result<Json<Product>, (StatusCode, String)> {
+    use axum_shop::schema::{product_categories, products};
+
     let mut conn = pool.get().await.map_err(internal_error)?;
 
     let product = diesel::insert_into(products::table)
@@ -64,25 +67,29 @@ pub async fn create_product_with_categories(
 pub async fn get_products(
     State(pool): State<Pool>,
 ) -> Result<Json<Vec<ProductWithCategories>>, (StatusCode, String)> {
+    use axum_shop::schema::{categories, product_categories, products};
+
     let mut conn = pool.get().await.map_err(internal_error)?;
 
     let tuple = products::table
-        .inner_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
-        .inner_join(categories::table.on(product_categories::category_id.eq(categories::id)))
-        .select((Product::as_select(), Category::as_select()))
-        .load::<(Product, Category)>(&mut conn)
+        .left_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
+        .left_join(categories::table.on(product_categories::category_id.eq(categories::id)))
+        .select((Product::as_select(), Option::<Category>::as_select()))
+        .load::<(Product, Option<Category>)>(&mut conn)
         .await
         .map_err(internal_error)?;
 
     let mut products_map = std::collections::HashMap::new();
+
     for (product, category) in tuple {
-        let entry = products_map
+        products_map
             .entry(product.id)
             .or_insert_with(|| ProductWithCategories {
                 product: product,
                 categories: Vec::new(),
-            });
-        entry.categories.push(category);
+            })
+            .categories
+            .extend(category);
     }
     let products = products_map.into_values().collect();
 
@@ -93,6 +100,8 @@ pub async fn get_product_by_id(
     State(pool): State<Pool>,
     Path(id): Path<i32>,
 ) -> Result<Json<Product>, (StatusCode, String)> {
+    use axum_shop::schema::products;
+
     let mut conn = pool.get().await.map_err(internal_error)?;
 
     let res = products::table
@@ -105,10 +114,12 @@ pub async fn get_product_by_id(
     Ok(Json(res))
 }
 
-pub async fn remove_product(
+pub async fn delete_product(
     Path(id): Path<i32>,
     State(pool): State<Pool>,
 ) -> Result<Json<Product>, (StatusCode, String)> {
+    use axum_shop::schema::products;
+
     let mut conn = pool.get().await.map_err(internal_error)?;
 
     let res = diesel::delete(products::table.find(id))
@@ -125,6 +136,8 @@ pub async fn update_product(
     Path(id): Path<i32>,
     Json(payload): Json<UpdateProduct>,
 ) -> Result<Json<Product>, (StatusCode, String)> {
+    use axum_shop::schema::products;
+
     let mut conn = pool.get().await.map_err(internal_error)?;
 
     let res = diesel::update(products::table.find(id))

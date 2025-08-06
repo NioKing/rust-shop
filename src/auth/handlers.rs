@@ -399,11 +399,12 @@ where
 
 async fn encode_token<T: Sync + DeserializeOwned + 'static + Serialize + Send>(
     claims: T,
-    secret: &String,
+    secret: &str,
 ) -> Result<String, (StatusCode, String)> {
+    let secret = secret.to_owned();
+    // let claims = claims.clone();
+
     let token = tokio::task::spawn_blocking({
-        // let claims = claims.clone();
-        let secret = secret.clone();
         move || {
             let refresh_token = encode(
                 &Header::default(),

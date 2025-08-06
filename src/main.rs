@@ -57,7 +57,7 @@ async fn main() {
         )
         .route(
             "/products/{id}",
-            delete(product::handlers::remove_product)
+            delete(product::handlers::delete_product)
                 .patch(product::handlers::update_product)
                 .get(product::handlers::get_product_by_id),
         )
