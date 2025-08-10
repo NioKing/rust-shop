@@ -7,6 +7,7 @@ mod utils;
 
 use axum::{
     Router,
+    http::StatusCode,
     middleware::{self},
     routing::{delete, get, patch, post},
 };
@@ -14,20 +15,22 @@ use diesel_async::{
     AsyncPgConnection,
     pooled_connection::{AsyncDieselConnectionManager, bb8},
 };
-use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
+// use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use listenfd::ListenFd;
-use std::{env, rc::Rc, sync::Arc};
+use std::env;
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/");
+use crate::utils::internal_error;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), (StatusCode, String)> {
     dotenv::dotenv().ok();
 
-    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    // let jwt_secret = env::var("JWT_SECRET").unwrap_or("super-secret-password".to_string());
+    std::fs::create_dir_all("uploads").expect("Failed to create uploads directory");
+
+    let db_url = env::var("DATABASE_URL").map_err(internal_error)?;
+    // let db_url = env::var("DATABASE_URL").expect("db url must be set");
 
     let config = AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
     let pool = bb8::Pool::builder().build(config).await.unwrap();
@@ -41,14 +44,6 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // {
-    //     let conn = pool.get().await.unwrap();
-    //     conn.interact(|conn| conn.run_pending_migrations(MIGRATIONS).map(|_| ()))
-    //         .await
-    //         .unwrap()
-    //         .unwrap();
-    // }
-    //
     let routes = Router::new()
         .route(
             "/products",
@@ -83,6 +78,7 @@ async fn main() {
         .route("/auth/login", post(auth::handlers::login_user))
         .route("/auth/logout", post(auth::handlers::logout))
         .route("/auth/refresh", post(auth::handlers::refresh_token))
+        .route("/upload", post(product::handlers::upload_image))
         .layer(middleware::from_fn(utils::print_req_res))
         .with_state(pool);
 
@@ -102,4 +98,5 @@ async fn main() {
 
     println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
+    Ok(())
 }

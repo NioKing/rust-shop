@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+
 use super::models::{
     CreateProductWithCategories, NewProduct, Product, ProductCategory, ProductWithCategories,
     UpdateProduct,
@@ -7,11 +8,14 @@ use crate::category::models::Category;
 use crate::utils::internal_error;
 use crate::utils::types::Pool;
 use axum::{
-    extract::{Json, Path, State},
+    extract::{Json, Multipart, Path, State},
     http::StatusCode,
+    response::IntoResponse,
 };
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use tokio::io::AsyncWriteExt;
+use uuid::Uuid;
 
 pub async fn create_product(
     State(pool): State<Pool>,
@@ -148,4 +152,73 @@ pub async fn update_product(
         .map_err(internal_error)?;
 
     Ok(Json(res))
+}
+
+pub async fn upload_image(
+    State(pool): State<Pool>,
+    mut multipart: Multipart,
+) -> Result<(), (StatusCode, String)> {
+    while let Some(field) = multipart.next_field().await.map_err(internal_error)? {
+        if field.name().is_none() || field.file_name().is_none() {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Unable to upload file without a name".to_owned(),
+            ));
+        }
+
+        let content_type = field
+            .content_type()
+            .unwrap_or(mime::APPLICATION_OCTET_STREAM.as_ref());
+
+        if content_type != mime::IMAGE_JPEG && content_type != mime::IMAGE_PNG {
+            return Err((
+                StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                "Only JPEG and PNG images are allowed".to_owned(),
+            ));
+        };
+
+        let extension = if content_type == mime::IMAGE_JPEG {
+            "jpg"
+        } else {
+            "png"
+        };
+
+        let date = chrono::Local::now().format("%Y-%m-%d_%H:%M:%S");
+
+        let saved_file = format!("uploads/{}_{}.{}", Uuid::new_v4(), date, extension);
+
+        let mut file = tokio::fs::File::create(&saved_file).await.map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Unable to create a file".to_owned(),
+            )
+        })?;
+
+        let mut field = field;
+
+        while let Some(chunk) = field.chunk().await.map_err(internal_error)? {
+            file.write_all(&chunk).await.map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to write a file: {}", e),
+                )
+            })?;
+            // tokio::time::timeout(tokio::time::Duration::from_secs(5), file.write_all(&chunk))
+            //     .await
+            //     .map_err(|_| {
+            //         (
+            //             StatusCode::REQUEST_TIMEOUT,
+            //             "Write operation timed out".to_owned(),
+            //         )
+            //     })?
+            //     .map_err(|_| {
+            //         (
+            //             StatusCode::INTERNAL_SERVER_ERROR,
+            //             "File write failed".to_owned(),
+            //         )
+            //     })?;
+        }
+    }
+
+    Ok(())
 }
