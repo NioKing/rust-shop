@@ -15,10 +15,10 @@ use diesel_async::{
     AsyncPgConnection,
     pooled_connection::{AsyncDieselConnectionManager, bb8},
 };
-// use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use listenfd::ListenFd;
 use std::env;
 use tokio::net::TcpListener;
+use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::utils::internal_error;
@@ -45,6 +45,7 @@ async fn main() -> Result<(), (StatusCode, String)> {
         .init();
 
     let routes = Router::new()
+        .nest_service("/uploads", ServeDir::new("uploads"))
         .route(
             "/products",
             get(product::handlers::get_products)
@@ -55,6 +56,10 @@ async fn main() -> Result<(), (StatusCode, String)> {
             delete(product::handlers::delete_product)
                 .patch(product::handlers::update_product)
                 .get(product::handlers::get_product_by_id),
+        )
+        .route(
+            "/products/{id}/image",
+            post(product::handlers::upload_image),
         )
         .route(
             "/categories",
@@ -78,7 +83,6 @@ async fn main() -> Result<(), (StatusCode, String)> {
         .route("/auth/login", post(auth::handlers::login_user))
         .route("/auth/logout", post(auth::handlers::logout))
         .route("/auth/refresh", post(auth::handlers::refresh_token))
-        .route("/upload", post(product::handlers::upload_image))
         .layer(middleware::from_fn(utils::print_req_res))
         .with_state(pool);
 

@@ -156,8 +156,24 @@ pub async fn update_product(
 
 pub async fn upload_image(
     State(pool): State<Pool>,
+    Path(id): Path<i32>,
     mut multipart: Multipart,
 ) -> Result<(), (StatusCode, String)> {
+    use axum_shop::schema::products;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let product = products::table
+        .find(id)
+        .select(Product::as_select())
+        .get_result(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    drop(product);
+
+    let mut filename: Option<String> = None;
+
     while let Some(field) = multipart.next_field().await.map_err(internal_error)? {
         if field.name().is_none() || field.file_name().is_none() {
             return Err((
@@ -187,6 +203,8 @@ pub async fn upload_image(
 
         let saved_file = format!("uploads/{}_{}.{}", Uuid::new_v4(), date, extension);
 
+        filename = Some(format!("{}_{}.{}", Uuid::new_v4(), date, extension));
+
         let mut file = tokio::fs::File::create(&saved_file).await.map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -203,22 +221,16 @@ pub async fn upload_image(
                     format!("Failed to write a file: {}", e),
                 )
             })?;
-            // tokio::time::timeout(tokio::time::Duration::from_secs(5), file.write_all(&chunk))
-            //     .await
-            //     .map_err(|_| {
-            //         (
-            //             StatusCode::REQUEST_TIMEOUT,
-            //             "Write operation timed out".to_owned(),
-            //         )
-            //     })?
-            //     .map_err(|_| {
-            //         (
-            //             StatusCode::INTERNAL_SERVER_ERROR,
-            //             "File write failed".to_owned(),
-            //         )
-            //     })?;
         }
     }
 
+    if let Some(image) = filename {
+        diesel::update(products::table.find(id))
+            .set(products::image.eq(image))
+            .returning(Product::as_returning())
+            .get_result(&mut conn)
+            .await
+            .map_err(internal_error)?;
+    };
     Ok(())
 }
