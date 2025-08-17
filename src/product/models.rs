@@ -2,7 +2,7 @@ use axum_shop::schema::{product_categories, products};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Queryable, Selectable, Debug, PartialEq, Identifiable, Serialize)]
+#[derive(Queryable, Selectable, Debug, PartialEq, Identifiable, Serialize, QueryableByName)]
 #[diesel(table_name=products)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Product {
@@ -54,4 +54,10 @@ pub struct ProductWithCategories {
     #[serde(flatten)]
     pub product: Product,
     pub categories: Vec<crate::category::models::Category>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Pagination {
+    pub offset: Option<usize>,
+    pub limit: Option<usize>,
 }

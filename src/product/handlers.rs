@@ -1,21 +1,28 @@
 #![allow(dead_code)]
 
+use std::usize;
+
 use super::models::{
-    CreateProductWithCategories, NewProduct, Product, ProductCategory, ProductWithCategories,
-    UpdateProduct,
+    CreateProductWithCategories, NewProduct, Pagination, Product, ProductCategory,
+    ProductWithCategories, UpdateProduct,
 };
 use crate::category::models::Category;
 use crate::utils::internal_error;
 use crate::utils::types::Pool;
 use axum::{
-    extract::{Json, Multipart, Path, State},
+    extract::{Json, Multipart, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
-use diesel::prelude::*;
+use diesel::{
+    dsl::sql,
+    prelude::*,
+    sql_types::{Array, Json as JsonSql, Text},
+};
 use diesel_async::RunQueryDsl;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
+use validator::ValidateRequired;
 
 pub async fn create_product(
     State(pool): State<Pool>,
@@ -70,34 +77,42 @@ pub async fn create_product_with_categories(
 
 pub async fn get_products(
     State(pool): State<Pool>,
+    pagination: Query<Pagination>,
 ) -> Result<Json<Vec<ProductWithCategories>>, (StatusCode, String)> {
     use axum_shop::schema::{categories, product_categories, products};
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let tuple = products::table
+    if pagination.limit.is_some() || pagination.offset.is_some() {
+        println!("here");
+    }
+
+    let rows = products::table
         .left_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
         .left_join(categories::table.on(product_categories::category_id.eq(categories::id)))
-        .select((Product::as_select(), Option::<Category>::as_select()))
-        .load::<(Product, Option<Category>)>(&mut conn)
+        .select((
+            Product::as_select(),
+            sql::<diesel::sql_types::Json>(
+                "COALESCE(json_agg(categories.*) FILTER (WHERE categories.id IS NOT NULL), '[]')",
+            ),
+        ))
+        .group_by(products::id)
+        .load(&mut conn)
         .await
         .map_err(internal_error)?;
 
-    let mut products_map = std::collections::HashMap::new();
+    let res = rows
+        .into_iter()
+        .map(|(product, cats_json)| {
+            let categories = serde_json::from_value(cats_json).unwrap_or_default();
+            ProductWithCategories {
+                product,
+                categories,
+            }
+        })
+        .collect();
 
-    for (product, category) in tuple {
-        products_map
-            .entry(product.id)
-            .or_insert_with(|| ProductWithCategories {
-                product: product,
-                categories: Vec::new(),
-            })
-            .categories
-            .extend(category);
-    }
-    let products = products_map.into_values().collect();
-
-    Ok(Json(products))
+    Ok(Json(res))
 }
 
 pub async fn get_product_by_id(

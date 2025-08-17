@@ -33,7 +33,10 @@ async fn main() -> Result<(), (StatusCode, String)> {
     // let db_url = env::var("DATABASE_URL").expect("db url must be set");
 
     let config = AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
-    let pool = bb8::Pool::builder().build(config).await.unwrap();
+    let pool = bb8::Pool::builder()
+        .build(config)
+        .await
+        .map_err(internal_error)?;
 
     tracing_subscriber::registry()
         .with(

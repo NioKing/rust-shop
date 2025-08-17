@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::product::models::Product;
 
-#[derive(Queryable, Selectable, Debug, PartialEq, Identifiable, Serialize)]
+#[derive(Queryable, Selectable, Debug, PartialEq, Identifiable, Serialize, Deserialize)]
 #[diesel(table_name=categories)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Category {
