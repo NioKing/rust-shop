@@ -58,6 +58,6 @@ pub struct ProductWithCategories {
 
 #[derive(Deserialize, Debug)]
 pub struct Pagination {
-    pub offset: Option<usize>,
-    pub limit: Option<usize>,
+    pub offset: Option<i64>,
+    pub limit: Option<i64>,
 }

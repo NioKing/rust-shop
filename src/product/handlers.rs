@@ -83,10 +83,6 @@ pub async fn get_products(
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    if pagination.limit.is_some() || pagination.offset.is_some() {
-        println!("here");
-    }
-
     let rows = products::table
         .left_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
         .left_join(categories::table.on(product_categories::category_id.eq(categories::id)))
@@ -96,6 +92,8 @@ pub async fn get_products(
                 "COALESCE(json_agg(categories.*) FILTER (WHERE categories.id IS NOT NULL), '[]')",
             ),
         ))
+        .limit(pagination.limit.unwrap_or(i64::MAX))
+        .offset(pagination.offset.unwrap_or(0))
         .group_by(products::id)
         .load(&mut conn)
         .await
