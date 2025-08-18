@@ -103,8 +103,8 @@ pub async fn get_products(
 
     let res = rows
         .into_iter()
-        .map(|(product, cats_json)| {
-            let categories = serde_json::from_value(cats_json).unwrap_or_default();
+        .map(|(product, categories_json)| {
+            let categories = serde_json::from_value(categories_json).unwrap_or_default();
             ProductWithCategories {
                 product,
                 categories,
@@ -118,17 +118,37 @@ pub async fn get_products(
 pub async fn get_product_by_id(
     State(pool): State<Pool>,
     Path(id): Path<i32>,
-) -> Result<Json<Product>, (StatusCode, String)> {
-    use axum_shop::schema::products;
+) -> Result<Json<ProductWithCategories>, (StatusCode, String)> {
+    use axum_shop::schema::{categories, product_categories, products};
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let res = products::table
+    let (product, categories_json) = products::table
         .find(id)
-        .select(Product::as_select())
-        .get_result(&mut conn)
+        .left_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
+        .left_join(categories::table.on(product_categories::category_id.eq(categories::id)))
+        .select((
+            Product::as_select(),
+            sql::<diesel::sql_types::Json>(
+                "COALESCE(json_agg(categories.*) FILTER (WHERE categories.id IS NOT NULL), '[]')",
+            ),
+        ))
+        .group_by(products::id)
+        .get_result::<(Product, serde_json::Value)>(&mut conn)
         .await
         .map_err(internal_error)?;
+
+    let res = ProductWithCategories {
+        product: product,
+        categories: serde_json::from_value(categories_json).unwrap_or_default(),
+    };
+
+    // let res = products::table
+    //     .find(id)
+    //     .select(Product::as_select())
+    //     .get_result(&mut conn)
+    //     .await
+    //     .map_err(internal_error)?;
 
     Ok(Json(res))
 }

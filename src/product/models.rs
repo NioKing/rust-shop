@@ -49,7 +49,7 @@ pub struct CreateProductWithCategories {
     pub category_ids: Vec<i32>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct ProductWithCategories {
     #[serde(flatten)]
     pub product: Product,
