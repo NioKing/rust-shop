@@ -92,6 +92,7 @@ pub async fn get_products(
                 "COALESCE(json_agg(categories.*) FILTER (WHERE categories.id IS NOT NULL), '[]')",
             ),
         ))
+        .order(products::id.asc())
         .limit(pagination.limit.unwrap_or(i64::MAX))
         .offset(pagination.offset.unwrap_or(0))
         .group_by(products::id)
