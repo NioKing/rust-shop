@@ -24,19 +24,19 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use crate::utils::internal_error;
 
 #[tokio::main]
-async fn main() -> Result<(), (StatusCode, String)> {
+async fn main() -> Result<(), String> {
     dotenv::dotenv().ok();
 
     std::fs::create_dir_all("uploads").expect("Failed to create uploads directory");
 
-    let db_url = env::var("DATABASE_URL").map_err(internal_error)?;
-    // let db_url = env::var("DATABASE_URL").expect("db url must be set");
+    let db_url =
+        env::var("DATABASE_URL").map_err(|e| format!("Data base url must be set: {}", e))?;
 
     let config = AsyncDieselConnectionManager::<AsyncPgConnection>::new(db_url);
     let pool = bb8::Pool::builder()
         .build(config)
         .await
-        .map_err(internal_error)?;
+        .map_err(|e| format!("Failed to create db pool: {}", e))?;
 
     tracing_subscriber::registry()
         .with(
