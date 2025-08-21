@@ -1,6 +1,7 @@
 use axum_shop::schema::{product_categories, products};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 #[derive(Queryable, Selectable, Debug, PartialEq, Identifiable, Serialize, QueryableByName)]
 #[diesel(table_name=products)]
@@ -13,11 +14,16 @@ pub struct Product {
     pub image: Option<String>,
 }
 
-#[derive(Insertable, Deserialize)]
+#[derive(Insertable, Deserialize, Validate)]
 #[diesel(table_name = products)]
 pub struct NewProduct {
+    #[validate(length(min = 6, message = "Product title must be at least 6 symbols long"))]
     pub title: String,
     pub price: f64,
+    #[validate(length(
+        min = 6,
+        message = "Product description must be at least 6 symbols long"
+    ))]
     pub description: String,
     pub image: Option<String>,
 }
