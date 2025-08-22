@@ -3,8 +3,8 @@
 use std::usize;
 
 use super::models::{
-    CreateProductWithCategories, NewProduct, Pagination, Product, ProductCategory,
-    ProductWithCategories, UpdateProduct,
+    CreateProductWithCategories, NewProduct, Product, ProductCategory, ProductWithCategories,
+    QueryParams, UpdateProduct,
 };
 use crate::category::models::Category;
 use crate::utils::internal_error;
@@ -77,13 +77,13 @@ pub async fn create_product_with_categories(
 
 pub async fn get_products(
     State(pool): State<Pool>,
-    pagination: Query<Pagination>,
+    query_params: Query<QueryParams>,
 ) -> Result<Json<Vec<ProductWithCategories>>, (StatusCode, String)> {
     use axum_shop::schema::{categories, product_categories, products};
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let rows = products::table
+    let mut query = products::table
         .left_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
         .left_join(categories::table.on(product_categories::category_id.eq(categories::id)))
         .select((
@@ -93,10 +93,51 @@ pub async fn get_products(
             ),
         ))
         .order(products::id.asc())
-        .limit(pagination.limit.unwrap_or(i64::MAX))
-        .offset(pagination.offset.unwrap_or(0))
         .group_by(products::id)
-        .load(&mut conn)
+        .into_boxed();
+
+    if let Some(offset) = query_params.offset {
+        query = query.offset(offset);
+    };
+
+    if let Some(limit) = query_params.limit {
+        query = query.limit(limit);
+    }
+
+    if let Some(cat_id) = query_params.category_id {
+        query = query.filter(product_categories::category_id.eq(cat_id));
+    }
+
+    if let Some(min_price) = query_params.min_price {
+        query = query.filter(products::price.gt(min_price));
+    }
+
+    if let Some(max_price) = query_params.max_price {
+        query = query.filter(
+            products::price
+                .lt(max_price)
+                .or(products::price.eq(max_price)),
+        );
+    }
+    // let rows = products::table
+    //     .left_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
+    //     .left_join(categories::table.on(product_categories::category_id.eq(categories::id)))
+    //     .select((
+    //         Product::as_select(),
+    //         sql::<diesel::sql_types::Json>(
+    //             "COALESCE(json_agg(categories.*) FILTER (WHERE categories.id IS NOT NULL), '[]')",
+    //         ),
+    //     ))
+    //     .order(products::id.asc())
+    //     .limit(query_params.limit.unwrap_or(i64::MAX))
+    //     .offset(query_params.offset.unwrap_or(0))
+    //     .group_by(products::id)
+    //     .load::<(Product, serde_json::Value)>(&mut conn)
+    //     .await
+    //     .map_err(internal_error)?;
+
+    let rows = query
+        .load::<(Product, serde_json::Value)>(&mut conn)
         .await
         .map_err(internal_error)?;
 

@@ -6,7 +6,7 @@ use axum::{
     http::StatusCode,
 };
 use axum_shop::schema;
-use diesel::prelude::*;
+use diesel::{prelude::*, query_builder::BoxedSelectStatement};
 use diesel_async::RunQueryDsl;
 use schema::categories;
 

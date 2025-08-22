@@ -63,7 +63,10 @@ pub struct ProductWithCategories {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Pagination {
+pub struct QueryParams {
     pub offset: Option<i64>,
     pub limit: Option<i64>,
+    pub category_id: Option<i32>,
+    pub min_price: Option<f64>,
+    pub max_price: Option<f64>,
 }
