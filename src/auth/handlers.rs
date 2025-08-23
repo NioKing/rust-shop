@@ -48,6 +48,7 @@ pub async fn create_user(
         email: payload.email,
         password_hash: hashed_pass,
         hashed_rt: None,
+        role: "user".to_owned(),
     };
 
     let res = diesel::insert_into(users::table)
@@ -192,24 +193,34 @@ pub async fn update_user_email_or_password(
 
 pub async fn get_all_users(
     State(pool): State<Pool>,
-    // claims: AccessTokenClaims,
 ) -> Result<Json<Vec<User>>, (StatusCode, String)> {
     use axum_shop::schema::users;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    // let user_id = Uuid::parse_str(&claims.sub).unwrap();
-    //
-    // let res = users::table
-    //     .filter(users::id.eq(&user_id))
-    //     .select(User::as_select())
-    //     .get_result(&mut conn)
-    //     .await
-    //     .map_err(internal_error)?;
-
     let res = users::table
         .select(User::as_select())
         .load(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
+}
+
+pub async fn get_current_user(
+    State(pool): State<Pool>,
+    claims: AccessTokenClaims,
+) -> Result<Json<SafeUser>, (StatusCode, String)> {
+    use axum_shop::schema::users;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let user_id = Uuid::parse_str(&claims.sub).unwrap();
+
+    let res = users::table
+        .filter(users::id.eq(&user_id))
+        .select(SafeUser::as_select())
+        .get_result(&mut conn)
         .await
         .map_err(internal_error)?;
 
@@ -239,6 +250,7 @@ pub async fn login_user(
         Duration::days(7),
         &user.id.to_string(),
         &user.email,
+        &user.role,
     )
     .await?;
 
@@ -309,6 +321,7 @@ pub async fn refresh_token(
         Duration::days(7),
         &user.id.to_string(),
         &user.email,
+        &user.role,
     )
     .await?;
 
@@ -333,11 +346,13 @@ async fn create_tokens_pair(
     refresh_duration: Duration,
     id: &str,
     email: &str,
+    role: &str,
 ) -> Result<(String, String), (StatusCode, String)> {
     let access_exprires = Utc::now() + access_duration;
     let access_claims = AccessTokenClaims {
         sub: id.to_owned(),
         email: email.to_owned(),
+        role: role.to_owned(),
         exp: access_exprires.timestamp() as usize,
     };
 

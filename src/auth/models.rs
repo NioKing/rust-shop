@@ -20,6 +20,7 @@ pub struct User {
     pub email: String,
     pub password_hash: String,
     pub hashed_rt: Option<String>,
+    pub role: String,
 }
 
 #[derive(Insertable, Deserialize, Debug, Validate)]
@@ -43,6 +44,7 @@ pub struct UserEmail {
 pub struct SafeUser {
     pub id: uuid::Uuid,
     pub email: String,
+    pub role: String,
 }
 
 #[derive(Insertable, Deserialize, Debug, Validate, AsChangeset)]
@@ -75,6 +77,7 @@ pub struct LoginUser {
 pub struct AccessTokenClaims {
     pub sub: String,
     pub email: String,
+    pub role: String,
     pub exp: usize,
 }
 
@@ -110,6 +113,14 @@ pub enum AuthError {
     InvalidToken,
     FailedTask,
     MissingSecret,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UserRole {
+    User,
+    Seller,
+    Admin,
 }
 
 impl IntoResponse for AuthError {

@@ -49,6 +49,8 @@ diesel::table! {
         #[max_length = 100]
         password_hash -> Varchar,
         hashed_rt -> Nullable<Text>,
+        #[max_length = 10]
+        role -> Varchar,
     }
 }
 

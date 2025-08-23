@@ -16,7 +16,7 @@ use diesel::{
     dsl::sql,
     prelude::*,
     sql_query,
-    sql_types::{Array, Json as JsonSql, Text},
+    sql_types::{Array, Text},
 };
 use diesel_async::RunQueryDsl;
 use tokio::io::AsyncWriteExt;

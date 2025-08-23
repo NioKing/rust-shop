@@ -76,6 +76,7 @@ async fn main() -> Result<(), String> {
             "/users",
             get(auth::handlers::get_all_users).post(auth::handlers::create_user),
         )
+        .route("/users/me", get(auth::handlers::get_current_user))
         .route(
             "/users/{id}",
             patch(auth::handlers::update_user_email_or_password)
