@@ -1,10 +1,8 @@
 #![allow(dead_code)]
 
-use std::usize;
-
 use super::models::{
-    CreateProductWithCategories, NewProduct, Product, ProductCategory, ProductWithCategories,
-    QueryParams, UpdateProduct,
+    CreateProductWithCategories, NewProduct, OrderByParams, Product, ProductCategory,
+    ProductWithCategories, QueryParams, SortByParams, UpdateProduct,
 };
 use crate::category::models::Category;
 use crate::utils::internal_error;
@@ -17,6 +15,7 @@ use axum::{
 use diesel::{
     dsl::sql,
     prelude::*,
+    sql_query,
     sql_types::{Array, Json as JsonSql, Text},
 };
 use diesel_async::RunQueryDsl;
@@ -92,7 +91,6 @@ pub async fn get_products(
                 "COALESCE(json_agg(categories.*) FILTER (WHERE categories.id IS NOT NULL), '[]')",
             ),
         ))
-        .order(products::id.asc())
         .group_by(products::id)
         .into_boxed();
 
@@ -109,7 +107,11 @@ pub async fn get_products(
     }
 
     if let Some(min_price) = query_params.min_price {
-        query = query.filter(products::price.gt(min_price));
+        query = query.filter(
+            products::price
+                .gt(min_price)
+                .or(products::price.eq(min_price)),
+        );
     }
 
     if let Some(max_price) = query_params.max_price {
@@ -119,6 +121,26 @@ pub async fn get_products(
                 .or(products::price.eq(max_price)),
         );
     }
+
+    if let (Some(order), Some(sort_param)) = (&query_params.sort_ord, &query_params.sort_by) {
+        match (sort_param.to_owned(), order) {
+            (SortByParams::Id, OrderByParams::Asc) => query = query.order(products::id.asc()),
+            (SortByParams::Id, OrderByParams::Desc) => query = query.order(products::id.desc()),
+            (SortByParams::Title, OrderByParams::Asc) => query = query.order(products::title.asc()),
+            (SortByParams::Title, OrderByParams::Desc) => {
+                query = query.order(products::title.desc())
+            }
+            (SortByParams::Price, OrderByParams::Asc) => query = query.order(products::price.asc()),
+            (SortByParams::Price, OrderByParams::Desc) => {
+                query = query.order(products::price.desc())
+            }
+
+            _ => {
+                return Err((StatusCode::BAD_REQUEST, "Invalid sort param".to_owned()));
+            }
+        }
+    };
+
     // let rows = products::table
     //     .left_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
     //     .left_join(categories::table.on(product_categories::category_id.eq(categories::id)))

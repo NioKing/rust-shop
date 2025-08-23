@@ -69,4 +69,21 @@ pub struct QueryParams {
     pub category_id: Option<i32>,
     pub min_price: Option<f64>,
     pub max_price: Option<f64>,
+    pub sort_by: Option<SortByParams>,
+    pub sort_ord: Option<OrderByParams>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum OrderByParams {
+    Asc,
+    Desc,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum SortByParams {
+    Id,
+    Title,
+    Price,
 }
