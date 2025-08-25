@@ -523,4 +523,3 @@ async fn validate_hash(password: String, hash: String) -> Result<bool, (StatusCo
 
     Ok(is_valid)
 }
-
