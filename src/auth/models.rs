@@ -73,6 +73,13 @@ pub struct LoginUser {
     pub password: String,
 }
 
+#[derive(Serialize, Debug)]
+pub struct SafeUserWithCart {
+    #[serde(flatten)]
+    pub user: SafeUser,
+    pub cart: crate::cart::models::SafeCart,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccessTokenClaims {
     pub sub: String,
