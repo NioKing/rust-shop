@@ -71,6 +71,7 @@ pub struct QueryParams {
     pub max_price: Option<f64>,
     pub sort_by: Option<SortByParams>,
     pub sort_ord: Option<OrderByParams>,
+    pub search_title: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]

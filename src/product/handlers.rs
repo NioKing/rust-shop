@@ -79,6 +79,7 @@ pub async fn get_products(
     query_params: Query<QueryParams>,
 ) -> Result<Json<Vec<ProductWithCategories>>, (StatusCode, String)> {
     use axum_shop::schema::{categories, product_categories, products};
+    use diesel_full_text_search::*;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
@@ -141,6 +142,10 @@ pub async fn get_products(
         }
     };
 
+    if let Some(title) = &query_params.search_title {
+        // query = query.filter(to_tsvector(products::title).matches(to_tsquery(title)));
+        query = query.filter(products::title.ilike(format!("%{}%", title)));
+    };
     // let rows = products::table
     //     .left_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
     //     .left_join(categories::table.on(product_categories::category_id.eq(categories::id)))

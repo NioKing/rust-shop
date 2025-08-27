@@ -19,6 +19,7 @@ diesel = { version = "2.2.10", features = [
   "serde_json",
 ] }
 diesel-async = { version = "0.5.2", features = ["postgres", "bb8"] }
+diesel_full_text_search = "2.2.0"
 diesel_migrations = "2.2.0"
 dotenv = "0.15.0"
 dotenvy = "0.15.7"
