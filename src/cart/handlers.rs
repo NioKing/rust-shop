@@ -1,6 +1,7 @@
-use super::models::{Cart, CartWithProducts};
-use crate::utils::internal_error;
+use super::models::{Cart, CartWithProducts, ProductCarts, ProductsToCart};
+use crate::auth::models::User;
 use crate::utils::types::Pool;
+use crate::{auth::models::AccessTokenClaims, utils::internal_error};
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -8,6 +9,7 @@ use axum::{
 use axum_validated_extractors::ValidatedJson;
 use diesel::{dsl::sql, prelude::*};
 use diesel_async::RunQueryDsl;
+use uuid::Uuid;
 
 pub async fn get_all_cart(
     State(pool): State<Pool>,
@@ -39,4 +41,42 @@ pub async fn get_all_cart(
         .collect();
 
     Ok(Json(res))
+}
+
+pub async fn add_products_to_cart(
+    State(pool): State<Pool>,
+    claims: AccessTokenClaims,
+    Json(payload): Json<ProductsToCart>,
+) -> Result<Json<Cart>, (StatusCode, String)> {
+    use axum_shop::schema::{cart_products, carts, products, users};
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let user_id = Uuid::parse_str(&claims.sub).unwrap();
+
+    let cart = carts::table
+        .filter(carts::user_id.eq(&user_id))
+        .select(Cart::as_select())
+        .get_result(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    let products = payload
+        .product_ids
+        .iter()
+        .map(|prod_id| ProductCarts {
+            cart_id: cart.id,
+            product_id: *prod_id,
+        })
+        .collect::<Vec<_>>();
+
+    //TODO cart updated at timestamp
+
+    diesel::insert_into(cart_products::table)
+        .values(&products)
+        .execute(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Json(cart))
 }

@@ -44,3 +44,8 @@ pub struct CartWithProducts {
     pub cart: Cart,
     pub products: Vec<crate::product::models::Product>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct ProductsToCart {
+    pub product_ids: Vec<i32>,
+}
