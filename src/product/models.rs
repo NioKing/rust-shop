@@ -3,7 +3,9 @@ use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-#[derive(Queryable, Selectable, Debug, PartialEq, Identifiable, Serialize, QueryableByName)]
+#[derive(
+    Queryable, Selectable, Debug, PartialEq, Identifiable, Serialize, QueryableByName, Deserialize,
+)]
 #[diesel(table_name=products)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Product {

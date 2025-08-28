@@ -1,4 +1,4 @@
-use axum_shop::schema::carts;
+use axum_shop::schema::{cart_products, carts};
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -26,4 +26,21 @@ pub struct NewCart {
 pub struct SafeCart {
     pub id: i32,
     pub updated_at: NaiveDate,
+}
+
+#[derive(Insertable, Debug, Queryable, Selectable, Identifiable, Serialize, Deserialize)]
+#[diesel(belongs_to(Product))]
+#[diesel(belongs_to(Cart))]
+#[diesel(table_name=cart_products)]
+#[diesel(primary_key(product_id, cart_id))]
+pub struct ProductCarts {
+    pub product_id: i32,
+    pub cart_id: i32,
+}
+
+#[derive(Serialize, Debug)]
+pub struct CartWithProducts {
+    #[serde(flatten)]
+    pub cart: Cart,
+    pub products: Vec<crate::product::models::Product>,
 }
