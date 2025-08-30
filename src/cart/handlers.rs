@@ -129,7 +129,7 @@ pub async fn remove_product_from_cart(
                 .execute(&mut conn)
                 .await?;
 
-                if deleted_count != payload.product_ids.len() {
+                if &deleted_count != &payload.product_ids.len() {
                     return Err(diesel::result::Error::RollbackTransaction);
                 }
 
