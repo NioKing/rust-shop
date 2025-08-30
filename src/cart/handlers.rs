@@ -8,7 +8,7 @@ use axum::{
 };
 use axum_validated_extractors::ValidatedJson;
 use diesel::{dsl::sql, prelude::*};
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use uuid::Uuid;
 
 pub async fn get_all_cart(
@@ -54,29 +54,98 @@ pub async fn add_products_to_cart(
 
     let user_id = Uuid::parse_str(&claims.sub).unwrap();
 
-    let cart = carts::table
-        .filter(carts::user_id.eq(&user_id))
-        .select(Cart::as_select())
-        .get_result(&mut conn)
-        .await
-        .map_err(internal_error)?;
+    let res = conn
+        .transaction::<Cart, diesel::result::Error, _>(move |mut conn| {
+            Box::pin(async move {
+                let cart = carts::table
+                    .filter(carts::user_id.eq(&user_id))
+                    .select(Cart::as_select())
+                    .get_result(&mut conn)
+                    .await?;
 
-    let products = payload
-        .product_ids
-        .iter()
-        .map(|prod_id| ProductCarts {
-            cart_id: cart.id,
-            product_id: *prod_id,
+                let products = payload
+                    .product_ids
+                    .iter()
+                    .map(|prod_id| ProductCarts {
+                        cart_id: cart.id,
+                        product_id: *prod_id,
+                    })
+                    .collect::<Vec<_>>();
+
+                diesel::insert_into(cart_products::table)
+                    .values(&products)
+                    .execute(&mut conn)
+                    .await?;
+
+                let updated_at = chrono::Local::now().date_naive();
+
+                let updated_cart = diesel::update(carts::table.find(&cart.id))
+                    .set(carts::updated_at.eq(&updated_at))
+                    .returning(Cart::as_returning())
+                    .get_result(&mut conn)
+                    .await?;
+
+                Ok(updated_cart)
+            })
         })
-        .collect::<Vec<_>>();
-
-    //TODO cart updated at timestamp
-
-    diesel::insert_into(cart_products::table)
-        .values(&products)
-        .execute(&mut conn)
         .await
         .map_err(internal_error)?;
 
-    Ok(Json(cart))
+    Ok(Json(res))
+}
+
+pub async fn remove_product_from_cart(
+    State(pool): State<Pool>,
+    claims: AccessTokenClaims,
+    Json(payload): Json<ProductsToCart>,
+) -> Result<Json<Cart>, (StatusCode, String)> {
+    use axum_shop::schema::{cart_products, carts, products, users};
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    if payload.product_ids.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Product ids cannot be empty!".to_owned(),
+        ));
+    }
+
+    let user_id = Uuid::parse_str(&claims.sub).unwrap();
+
+    let res = conn
+        .transaction::<Cart, diesel::result::Error, _>(move |mut conn| {
+            Box::pin(async move {
+                let cart = carts::table
+                    .filter(carts::user_id.eq(&user_id))
+                    .select(Cart::as_select())
+                    .get_result(&mut conn)
+                    .await?;
+
+                let deleted_count = diesel::delete(
+                    cart_products::table
+                        .filter(cart_products::cart_id.eq(&cart.id))
+                        .filter(cart_products::product_id.eq_any(&payload.product_ids)),
+                )
+                .execute(&mut conn)
+                .await?;
+
+                if deleted_count != payload.product_ids.len() {
+                    return Err(diesel::result::Error::RollbackTransaction);
+                }
+
+                let updated_at = chrono::Local::now().date_naive();
+
+                let updated_cart = diesel::update(carts::table.find(&cart.id))
+                    .set(carts::updated_at.eq(&updated_at))
+                    .returning(Cart::as_returning())
+                    .get_result(&mut conn)
+                    .await?;
+
+                Ok(updated_cart)
+            })
+        })
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
 }
