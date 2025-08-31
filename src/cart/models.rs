@@ -42,7 +42,7 @@ pub struct ProductCarts {
 pub struct CartWithProducts {
     #[serde(flatten)]
     pub cart: Cart,
-    pub products: Vec<crate::product::models::Product>,
+    pub products: Vec<crate::product::models::ProductWithQty>,
 }
 
 #[derive(Debug, Deserialize, Clone)]

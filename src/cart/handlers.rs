@@ -24,8 +24,23 @@ pub async fn get_all_cart(
         .select((
             Cart::as_select(),
             sql::<diesel::sql_types::Json>(
-                "COALESCE(json_agg(products.*) FILTER (WHERE products.id IS NOT NULL), '[]')",
+                "COALESCE(
+                json_agg(
+                json_build_object(
+                    'id', products.id,
+                    'title', products.title,
+                    'price', products.price,
+                    'description', products.description,
+                    'image', products.image,
+                    'quantity', cart_products.quantity
+                )
+            ) FILTER (WHERE products.id IS NOT NULL),
+            '[]'
+        )",
             ),
+            // sql::<diesel::sql_types::Json>(
+            //     "COALESCE(json_agg(products.*) FILTER (WHERE products.id IS NOT NULL), '[]')",
+            // ),
         ))
         .group_by(carts::id)
         .load::<(Cart, serde_json::Value)>(&mut conn)

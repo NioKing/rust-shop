@@ -4,6 +4,7 @@ diesel::table! {
     cart_products (product_id, cart_id) {
         product_id -> Int4,
         cart_id -> Int4,
+        quantity -> Int4,
     }
 }
 

@@ -3,9 +3,7 @@ use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-#[derive(
-    Queryable, Selectable, Debug, PartialEq, Identifiable, Serialize, QueryableByName, Deserialize,
-)]
+#[derive(Queryable, Selectable, Debug, Identifiable, Serialize, Deserialize)]
 #[diesel(table_name=products)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Product {
@@ -14,6 +12,16 @@ pub struct Product {
     pub price: f64,
     pub description: String,
     pub image: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProductWithQty {
+    pub id: i32,
+    pub title: String,
+    pub price: f64,
+    pub description: String,
+    pub image: Option<String>,
+    pub quantity: i32,
 }
 
 #[derive(Insertable, Deserialize, Validate)]
