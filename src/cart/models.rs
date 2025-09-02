@@ -28,6 +28,12 @@ pub struct SafeCart {
     pub updated_at: NaiveDate,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct ProductWithQuantity {
+    pub product_id: i32,
+    pub quantity: i32,
+}
+
 #[derive(Insertable, Debug, Queryable, Selectable, Identifiable, Serialize, Deserialize)]
 #[diesel(belongs_to(Product))]
 #[diesel(belongs_to(Cart))]
@@ -36,6 +42,7 @@ pub struct SafeCart {
 pub struct ProductCarts {
     pub product_id: i32,
     pub cart_id: i32,
+    pub quantity: i32
 }
 
 #[derive(Serialize, Debug)]
@@ -47,5 +54,5 @@ pub struct CartWithProducts {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ProductsToCart {
-    pub product_ids: Vec<i32>,
+    pub items: Vec<ProductWithQuantity>,
 }

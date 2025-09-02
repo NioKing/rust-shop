@@ -38,9 +38,6 @@ pub async fn get_all_cart(
             '[]'
         )",
             ),
-            // sql::<diesel::sql_types::Json>(
-            //     "COALESCE(json_agg(products.*) FILTER (WHERE products.id IS NOT NULL), '[]')",
-            // ),
         ))
         .group_by(carts::id)
         .load::<(Cart, serde_json::Value)>(&mut conn)
@@ -79,11 +76,12 @@ pub async fn add_products_to_cart(
                     .await?;
 
                 let products = payload
-                    .product_ids
+                    .items
                     .iter()
-                    .map(|prod_id| ProductCarts {
+                    .map(|item| ProductCarts {
                         cart_id: cart.id,
-                        product_id: *prod_id,
+                        product_id: item.product_id,
+                        quantity: item.quantity,
                     })
                     .collect::<Vec<_>>();
 
@@ -118,7 +116,7 @@ pub async fn remove_product_from_cart(
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    if payload.product_ids.is_empty() {
+    if payload.items.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
             "Product ids cannot be empty!".to_owned(),
@@ -136,16 +134,54 @@ pub async fn remove_product_from_cart(
                     .get_result(&mut conn)
                     .await?;
 
-                let deleted_count = diesel::delete(
-                    cart_products::table
-                        .filter(cart_products::cart_id.eq(&cart.id))
-                        .filter(cart_products::product_id.eq_any(&payload.product_ids)),
-                )
-                .execute(&mut conn)
-                .await?;
+                let ids: Vec<i32> = payload.items.iter().map(|item| item.product_id).collect();
 
-                if &deleted_count != &payload.product_ids.len() {
-                    return Err(diesel::result::Error::RollbackTransaction);
+                let prods = cart_products::table
+                    .filter(cart_products::cart_id.eq(&cart.id))
+                    .filter(cart_products::product_id.eq_any(&ids))
+                    .select(ProductCarts::as_select())
+                    .load(&mut conn)
+                    .await?;
+
+                let mut prods_qty: std::collections::HashMap<i32, i32> =
+                    std::collections::HashMap::new();
+
+                for prod in prods.iter() {
+                    prods_qty.insert(prod.product_id, prod.quantity);
+                }
+
+                for item in payload.items.iter() {
+                    if !prods_qty.contains_key(&item.product_id) {
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    }
+
+                    let cur_qty = prods_qty.get(&item.product_id).unwrap();
+
+                    if &item.quantity > cur_qty {
+                        return Err(diesel::result::Error::RollbackTransaction);
+                    } else if &item.quantity == cur_qty {
+                        diesel::delete(
+                            cart_products::table.filter(
+                                cart_products::cart_id
+                                    .eq(&cart.id)
+                                    .and(cart_products::product_id.eq(&item.product_id)),
+                            ),
+                        )
+                        .execute(&mut conn)
+                        .await?;
+                    } else if &item.quantity < cur_qty {
+                        diesel::update(
+                            cart_products::table.filter(
+                                cart_products::cart_id
+                                    .eq(&cart.id)
+                                    .and(cart_products::product_id.eq(&item.product_id)),
+                            ),
+                        )
+                        .set(cart_products::quantity.eq(cur_qty - item.quantity))
+                        .returning(ProductCarts::as_returning())
+                        .get_result(&mut conn)
+                        .await?;
+                    }
                 }
 
                 let updated_at = chrono::Local::now().date_naive();
