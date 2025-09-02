@@ -146,22 +146,6 @@ pub async fn get_products(
         // query = query.filter(to_tsvector(products::title).matches(to_tsquery(title)));
         query = query.filter(products::title.ilike(format!("%{}%", title)));
     };
-    // let rows = products::table
-    //     .left_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
-    //     .left_join(categories::table.on(product_categories::category_id.eq(categories::id)))
-    //     .select((
-    //         Product::as_select(),
-    //         sql::<diesel::sql_types::Json>(
-    //             "COALESCE(json_agg(categories.*) FILTER (WHERE categories.id IS NOT NULL), '[]')",
-    //         ),
-    //     ))
-    //     .order(products::id.asc())
-    //     .limit(query_params.limit.unwrap_or(i64::MAX))
-    //     .offset(query_params.offset.unwrap_or(0))
-    //     .group_by(products::id)
-    //     .load::<(Product, serde_json::Value)>(&mut conn)
-    //     .await
-    //     .map_err(internal_error)?;
 
     let rows = query
         .load::<(Product, serde_json::Value)>(&mut conn)
@@ -209,13 +193,6 @@ pub async fn get_product_by_id(
         product: product,
         categories: serde_json::from_value(categories_json).unwrap_or_default(),
     };
-
-    // let res = products::table
-    //     .find(id)
-    //     .select(Product::as_select())
-    //     .get_result(&mut conn)
-    //     .await
-    //     .map_err(internal_error)?;
 
     Ok(Json(res))
 }
