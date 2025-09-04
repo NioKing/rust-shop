@@ -72,6 +72,14 @@ pub struct ProductWithCategories {
     pub categories: Vec<crate::category::models::Category>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ProductWithCategoriesResponse {
+    pub total: usize,
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+    pub products: Vec<ProductWithCategories>,
+}
+
 #[derive(Deserialize, Debug)]
 pub struct QueryParams {
     pub offset: Option<i64>,

@@ -2,7 +2,7 @@
 
 use super::models::{
     CreateProductWithCategories, NewProduct, OrderByParams, Product, ProductCategory,
-    ProductWithCategories, QueryParams, SortByParams, UpdateProduct,
+    ProductWithCategories, ProductWithCategoriesResponse, QueryParams, SortByParams, UpdateProduct,
 };
 use crate::category::models::Category;
 use crate::utils::internal_error;
@@ -77,7 +77,7 @@ pub async fn create_product_with_categories(
 pub async fn get_products(
     State(pool): State<Pool>,
     query_params: Query<QueryParams>,
-) -> Result<Json<Vec<ProductWithCategories>>, (StatusCode, String)> {
+) -> Result<Json<ProductWithCategoriesResponse>, (StatusCode, String)> {
     use axum_shop::schema::{categories, product_categories, products};
     use diesel_full_text_search::*;
 
@@ -152,7 +152,7 @@ pub async fn get_products(
         .await
         .map_err(internal_error)?;
 
-    let res = rows
+    let products_with_categories: Vec<ProductWithCategories> = rows
         .into_iter()
         .map(|(product, categories_json)| {
             let categories = serde_json::from_value(categories_json).unwrap_or_default();
@@ -162,6 +162,15 @@ pub async fn get_products(
             }
         })
         .collect();
+
+    let total = products_with_categories.len();
+
+    let res = ProductWithCategoriesResponse {
+        total,
+        page: query_params.offset,
+        limit: query_params.limit,
+        products: products_with_categories,
+    };
 
     Ok(Json(res))
 }
