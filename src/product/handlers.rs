@@ -13,7 +13,7 @@ use axum::{
     response::IntoResponse,
 };
 use diesel::{
-    dsl::sql,
+    dsl::{count_star, sql},
     prelude::*,
     sql_query,
     sql_types::{Array, Text},
@@ -95,20 +95,32 @@ pub async fn get_products(
         .group_by(products::id)
         .into_boxed();
 
-    if let Some(offset) = query_params.offset {
-        query = query.offset(offset);
-    };
+    let mut count_query = products::table
+        .left_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
+        .left_join(categories::table.on(product_categories::category_id.eq(categories::id)))
+        .into_boxed();
 
-    if let Some(limit) = query_params.limit {
-        query = query.limit(limit);
-    }
+    // if let Some(offset) = query_params.offset {
+    //     query = query.offset(offset);
+    // };
+    //
+    // if let Some(limit) = query_params.limit {
+    //     query = query.limit(limit);
+    // }
 
     if let Some(cat_id) = query_params.category_id {
         query = query.filter(product_categories::category_id.eq(cat_id));
+        count_query = count_query.filter(product_categories::category_id.eq(cat_id));
     }
 
     if let Some(min_price) = query_params.min_price {
         query = query.filter(
+            products::price
+                .gt(min_price)
+                .or(products::price.eq(min_price)),
+        );
+
+        count_query = count_query.filter(
             products::price
                 .gt(min_price)
                 .or(products::price.eq(min_price)),
@@ -121,7 +133,30 @@ pub async fn get_products(
                 .lt(max_price)
                 .or(products::price.eq(max_price)),
         );
+
+        count_query = count_query.filter(
+            products::price
+                .lt(max_price)
+                .or(products::price.eq(max_price)),
+        );
     }
+
+    if let Some(title) = &query_params.search_title {
+        // query = query.filter(to_tsvector(products::title).matches(to_tsquery(title)));
+        query = query.filter(products::title.ilike(format!("%{}%", title)));
+        count_query = count_query.filter(products::title.ilike(format!("%{}%", title)));
+    };
+
+    let total = count_query
+        .select(diesel::dsl::count_distinct(products::id))
+        .first::<i64>(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    let page_size = query_params.limit.unwrap_or(10);
+    let page = query_params.offset.unwrap_or(0) / page_size + 1;
+
+    query = query.limit(page_size).offset((page - 1) * page_size);
 
     if let (Some(order), Some(sort_param)) = (&query_params.sort_ord, &query_params.sort_by) {
         match (sort_param.to_owned(), order) {
@@ -142,11 +177,6 @@ pub async fn get_products(
         }
     };
 
-    if let Some(title) = &query_params.search_title {
-        // query = query.filter(to_tsvector(products::title).matches(to_tsquery(title)));
-        query = query.filter(products::title.ilike(format!("%{}%", title)));
-    };
-
     let rows = query
         .load::<(Product, serde_json::Value)>(&mut conn)
         .await
@@ -163,12 +193,11 @@ pub async fn get_products(
         })
         .collect();
 
-    let total = products_with_categories.len();
-
     let res = ProductWithCategoriesResponse {
         total,
-        page: query_params.offset,
-        limit: query_params.limit,
+        page,
+        page_size,
+        has_next: page * page_size < total,
         products: products_with_categories,
     };
 
