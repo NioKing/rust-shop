@@ -25,6 +25,33 @@ diesel::table! {
 }
 
 diesel::table! {
+    discount_categories (discount_id, category_id) {
+        discount_id -> Int4,
+        category_id -> Int4,
+    }
+}
+
+diesel::table! {
+    discount_products (discount_id, product_id) {
+        discount_id -> Int4,
+        product_id -> Int4,
+    }
+}
+
+diesel::table! {
+    discounts (id) {
+        id -> Int4,
+        title -> Text,
+        discount_type -> Nullable<Text>,
+        amount -> Numeric,
+        start_date -> Timestamp,
+        end_date -> Timestamp,
+        is_active -> Nullable<Bool>,
+        applies_to_all -> Nullable<Bool>,
+    }
+}
+
+diesel::table! {
     product_categories (product_id, category_id) {
         product_id -> Int4,
         category_id -> Int4,
@@ -58,6 +85,10 @@ diesel::table! {
 diesel::joinable!(cart_products -> carts (cart_id));
 diesel::joinable!(cart_products -> products (product_id));
 diesel::joinable!(carts -> users (user_id));
+diesel::joinable!(discount_categories -> categories (category_id));
+diesel::joinable!(discount_categories -> discounts (discount_id));
+diesel::joinable!(discount_products -> discounts (discount_id));
+diesel::joinable!(discount_products -> products (product_id));
 diesel::joinable!(product_categories -> categories (category_id));
 diesel::joinable!(product_categories -> products (product_id));
 
@@ -65,6 +96,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     cart_products,
     carts,
     categories,
+    discount_categories,
+    discount_products,
+    discounts,
     product_categories,
     products,
     users,

@@ -10,6 +10,7 @@ axum-extra = { version = "0.10.1", features = ["typed-header"] }
 axum-validated-extractors = "0.1.2"
 bb8 = "0.8.6"
 bcrypt = "0.17.0"
+bigdecimal = { version = "0.4.8", features = ["serde"] }
 chrono = { version = "0.4.41", features = ["serde"] }
 deadpool-diesel = { version = "0.6.1", features = ["postgres"] }
 diesel = { version = "2.2.10", features = [
