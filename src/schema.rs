@@ -41,13 +41,15 @@ diesel::table! {
 diesel::table! {
     discounts (id) {
         id -> Int4,
-        title -> Text,
-        discount_type -> Nullable<Text>,
+        #[max_length = 30]
+        title -> Varchar,
+        #[max_length = 10]
+        discount_type -> Varchar,
         amount -> Numeric,
         start_date -> Timestamp,
         end_date -> Timestamp,
-        is_active -> Nullable<Bool>,
-        applies_to_all -> Nullable<Bool>,
+        is_active -> Bool,
+        applies_to_all -> Bool,
     }
 }
 

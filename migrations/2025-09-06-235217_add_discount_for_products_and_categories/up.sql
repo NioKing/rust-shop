@@ -1,12 +1,12 @@
 CREATE TABLE discounts (
     id SERIAL PRIMARY KEY,
-    title TEXT NOT NULL,
-    discount_type TEXT CHECK (discount_type IN ('percentage', 'fixed')),
+    title VARCHAR(30) NOT NULL,
+    discount_type VARCHAR(10) NOT NULL,
     amount NUMERIC NOT NULL,
     start_date TIMESTAMP NOT NULL,
     end_date TIMESTAMP NOT NULL,
-    is_active BOOLEAN DEFAULT false,
-    applies_to_all BOOLEAN DEFAULT false
+    is_active BOOLEAN NOT NULL DEFAULT false,
+    applies_to_all BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE discount_products (

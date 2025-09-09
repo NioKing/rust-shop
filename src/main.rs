@@ -49,6 +49,7 @@ async fn main() -> Result<(), String> {
         .merge(category::routes::get_routes())
         .merge(auth::routes::get_routes())
         .merge(cart::routes::get_routes())
+        .merge(discount::routes::get_routes())
         .layer(middleware::from_fn(utils::print_req_res))
         .with_state(pool);
 
