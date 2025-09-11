@@ -40,7 +40,7 @@ pub enum DiscountType {
     Fixed,
 }
 
-#[derive(Debug, Queryable, Associations, Identifiable)]
+#[derive(Debug, Queryable, Associations, Identifiable, Insertable)]
 #[diesel(table_name=discount_products)]
 #[diesel(belongs_to(Discount))]
 #[diesel(belongs_to(Product))]
@@ -48,6 +48,23 @@ pub enum DiscountType {
 pub struct DiscountProduct {
     pub discount_id: i32,
     pub product_id: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProductsForDiscount {
+    pub product_id: Vec<i32>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DiscountWithProducts {
+    #[serde(flatten)]
+    pub discount: Discount,
+    pub products: Vec<crate::product::models::Product>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DiscountWithProductsResponse {
+    pub discounts: Vec<DiscountWithProducts>,
 }
 
 impl NewDiscount {

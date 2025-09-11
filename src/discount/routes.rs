@@ -7,8 +7,13 @@ use super::handlers;
 use crate::utils::types::Pool;
 
 pub fn get_routes() -> Router<Pool> {
-    Router::new().route(
-        "/discounts",
-        get(handlers::get_all_discounts).post(handlers::create_discount),
-    )
+    Router::new()
+        .route(
+            "/discounts",
+            get(handlers::get_all_discounts).post(handlers::create_discount),
+        )
+        .route(
+            "/discounts/{id}/products",
+            post(handlers::add_discount_products),
+        )
 }

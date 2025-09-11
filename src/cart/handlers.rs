@@ -244,9 +244,9 @@ pub async fn get_cart_with_products(
     use axum_shop::schema::{cart_products, carts, products, users};
 
     let (cart, products) = carts::table
+        .find(cart_id)
         .left_join(cart_products::table.on(carts::id.eq(cart_products::cart_id)))
         .left_join(products::table.on(cart_products::product_id.eq(products::id)))
-        .filter(carts::id.eq(cart_id))
         .select((
             Cart::as_select(),
             sql::<diesel::sql_types::Json>(

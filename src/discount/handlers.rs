@@ -1,26 +1,51 @@
-use super::models::{Discount, DiscountProduct, DiscountType, NewDiscount};
-use crate::utils::internal_error;
+use super::models::{
+    Discount, DiscountProduct, DiscountType, DiscountWithProducts, DiscountWithProductsResponse,
+    NewDiscount, ProductsForDiscount,
+};
 use crate::utils::types::Pool;
+use crate::{discount, utils::internal_error};
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
 };
-use diesel::prelude::*;
+use axum_shop::schema::cart_products::product_id;
+use diesel::{dsl::sql, prelude::*};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 
 pub async fn get_all_discounts(
     State(pool): State<Pool>,
-) -> Result<Json<Vec<Discount>>, (StatusCode, String)> {
-    use axum_shop::schema::discounts;
+) -> Result<Json<DiscountWithProductsResponse>, (StatusCode, String)> {
+    use axum_shop::schema::{discount_products, discounts, products};
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let res = discounts::table
-        .select(Discount::as_select())
-        .load(&mut conn)
+    let rows = discounts::table
+        .left_join(discount_products::table.on(discounts::id.eq(discount_products::discount_id)))
+        .left_join(products::table.on(discount_products::product_id.eq(products::id)))
+        .select((
+            Discount::as_select(),
+            sql::<diesel::sql_types::Json>(
+                "COALESCE(json_agg(products.* ORDER BY products.id), '[]')",
+            ),
+        ))
+        .group_by(discounts::id)
+        .load::<(Discount, serde_json::Value)>(&mut conn)
         .await
         .map_err(internal_error)?;
+
+    let discounts_with_products: Vec<DiscountWithProducts> = rows
+        .into_iter()
+        .map(|(discount, prod_json)| {
+            let products = serde_json::from_value(prod_json).unwrap_or_default();
+
+            DiscountWithProducts { discount, products }
+        })
+        .collect();
+
+    let res = DiscountWithProductsResponse {
+        discounts: discounts_with_products,
+    };
 
     Ok(Json(res))
 }
@@ -53,6 +78,63 @@ pub async fn create_discount(
         .values(&payload)
         .returning(Discount::as_returning())
         .get_result(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
+}
+
+pub async fn add_discount_products(
+    State(pool): State<Pool>,
+    Path(id): Path<i32>,
+    Json(payload): Json<ProductsForDiscount>,
+) -> Result<Json<DiscountWithProducts>, (StatusCode, String)> {
+    use axum_shop::schema::{discount_products, discounts, products};
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let prods: Vec<_> = payload
+        .product_id
+        .iter()
+        .map(|prod_id| DiscountProduct {
+            discount_id: id,
+            product_id: *prod_id,
+        })
+        .collect();
+
+    let res = conn
+        .transaction::<DiscountWithProducts, diesel::result::Error, _>(move |mut conn| {
+            Box::pin(async move {
+                diesel::insert_into(discount_products::table)
+                    .values(&prods)
+                    .execute(&mut conn)
+                    .await?;
+
+                let (discount, products_json) = discounts::table
+                    .find(&id)
+                    .left_join(
+                        discount_products::table
+                            .on(discounts::id.eq(discount_products::discount_id)),
+                    )
+                    .left_join(products::table.on(discount_products::product_id.eq(products::id)))
+                    .select((
+                        Discount::as_select(),
+                        sql::<diesel::sql_types::Json>(
+                            "COALESCE(json_agg(products.* ORDER BY products.id), '[]')",
+                        ),
+                    ))
+                    .group_by(discounts::id)
+                    .get_result::<(Discount, serde_json::Value)>(&mut conn)
+                    .await?;
+
+                let res = DiscountWithProducts {
+                    discount,
+                    products: serde_json::from_value(products_json).unwrap_or_default(),
+                };
+
+                Ok(res)
+            })
+        })
         .await
         .map_err(internal_error)?;
 
