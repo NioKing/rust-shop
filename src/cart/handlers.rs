@@ -237,7 +237,7 @@ pub async fn remove_product_from_cart(
     Ok(Json(res))
 }
 
-pub async fn get_cart_with_products(
+async fn get_cart_with_products(
     cart_id: &i32,
     conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
 ) -> std::result::Result<CartWithProducts, diesel::result::Error> {

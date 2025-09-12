@@ -14,6 +14,6 @@ pub fn get_routes() -> Router<Pool> {
         )
         .route(
             "/discounts/{id}/products",
-            post(handlers::add_discount_products),
+            post(handlers::add_discount_products).delete(handlers::remove_products_from_discount),
         )
 }
