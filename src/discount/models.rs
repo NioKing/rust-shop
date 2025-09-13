@@ -32,6 +32,18 @@ pub struct NewDiscount {
     pub applies_to_all: bool,
 }
 
+#[derive(Debug, Insertable, AsChangeset, Deserialize)]
+#[diesel(table_name=discounts)]
+pub struct UpdateDiscount {
+    pub title: Option<String>,
+    pub discount_type: Option<String>,
+    pub amount: Option<bigdecimal::BigDecimal>,
+    pub start_date: Option<chrono::NaiveDateTime>,
+    pub end_date: Option<chrono::NaiveDateTime>,
+    pub is_active: Option<bool>,
+    pub applies_to_all: Option<bool>,
+}
+
 #[derive(Deserialize, Debug, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Text)]
 #[serde(rename_all = "lowercase")]

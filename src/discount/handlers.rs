@@ -1,6 +1,6 @@
 use super::models::{
     Discount, DiscountProduct, DiscountType, DiscountWithProducts, DiscountWithProductsResponse,
-    NewDiscount, ProductsForDiscount,
+    NewDiscount, ProductsForDiscount, UpdateDiscount,
 };
 use crate::utils::types::Pool;
 use crate::{discount, utils::internal_error};
@@ -168,8 +168,40 @@ pub async fn remove_products_from_discount(
         ));
     }
 
+    let res = get_discount_with_products(&id, &mut conn).await?;
+
+    Ok(Json(res))
+}
+
+pub async fn update_discount(
+    State(pool): State<Pool>,
+    Path(id): Path<i32>,
+    Json(payload): Json<UpdateDiscount>,
+) -> Result<Json<DiscountWithProducts>, (StatusCode, String)> {
+    use axum_shop::schema::discounts;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    diesel::update(discounts::table.find(&id))
+        .set(&payload)
+        .returning(Discount::as_returning())
+        .get_result(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    let discount = get_discount_with_products(&id, &mut conn).await?;
+
+    Ok(Json(discount))
+}
+
+async fn get_discount_with_products(
+    discount_id: &i32,
+    conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+) -> std::result::Result<DiscountWithProducts, (StatusCode, String)> {
+    use axum_shop::schema::{discount_products, discounts, products};
+
     let (discount, products_json) = discounts::table
-        .find(&id)
+        .find(discount_id)
         .left_join(discount_products::table.on(discounts::id.eq(discount_products::discount_id)))
         .left_join(products::table.on(discount_products::product_id.eq(products::id)))
         .select((
@@ -179,7 +211,7 @@ pub async fn remove_products_from_discount(
             ),
         ))
         .group_by(discounts::id)
-        .get_result::<(Discount, serde_json::Value)>(&mut conn)
+        .get_result::<(Discount, serde_json::Value)>(conn)
         .await
         .map_err(internal_error)?;
 
@@ -188,34 +220,5 @@ pub async fn remove_products_from_discount(
         products: serde_json::from_value(products_json).unwrap_or_default(),
     };
 
-    Ok(Json(res))
+    Ok(res)
 }
-
-// async fn get_discount_with_products(
-//     discount_id: &i32,
-//     conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
-// ) -> Result<DiscountWithProducts, (StatusCode, String)> {
-//     use axum_shop::schema::{discount_products, discounts, products};
-//
-//     let (discount, products_json) = discounts::table
-//         .find(discount_id)
-//         .left_join(discount_products::table.on(discounts::id.eq(discount_products::discount_id)))
-//         .left_join(products::table.on(discount_products::product_id.eq(products::id)))
-//         .select((
-//             Discount::as_select(),
-//             sql::<diesel::sql_types::Json>(
-//                 "COALESCE(json_agg(products.* ORDER BY products.id), '[]')",
-//             ),
-//         ))
-//         .group_by(discounts::id)
-//         .get_result::<(Discount, serde_json::Value)>(conn)
-//         .await
-//         .map_err(internal_error)?;
-//
-//     let res = DiscountWithProducts {
-//         discount,
-//         products: serde_json::from_value(products_json).unwrap_or_default(),
-//     };
-//
-//     Ok(res)
-// }
