@@ -4,7 +4,6 @@ use super::models::{
     CreateProductWithCategories, NewProduct, OrderByParams, Product, ProductCategory,
     ProductWithCategories, ProductWithCategoriesResponse, QueryParams, SortByParams, UpdateProduct,
 };
-use crate::category::models::Category;
 use crate::utils::internal_error;
 use crate::utils::types::Pool;
 use axum::{
@@ -88,9 +87,7 @@ pub async fn get_products(
         .left_join(categories::table.on(product_categories::category_id.eq(categories::id)))
         .select((
             Product::as_select(),
-            sql::<diesel::sql_types::Json>(
-                "COALESCE(json_agg(categories.*) FILTER (WHERE categories.id IS NOT NULL), '[]')",
-            ),
+            sql::<diesel::sql_types::Json>("COALESCE(json_agg(categories.*), '[]')"),
         ))
         .group_by(products::id)
         .into_boxed();
@@ -99,14 +96,6 @@ pub async fn get_products(
         .left_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
         .left_join(categories::table.on(product_categories::category_id.eq(categories::id)))
         .into_boxed();
-
-    // if let Some(offset) = query_params.offset {
-    //     query = query.offset(offset);
-    // };
-    //
-    // if let Some(limit) = query_params.limit {
-    //     query = query.limit(limit);
-    // }
 
     if let Some(cat_id) = query_params.category_id {
         query = query.filter(product_categories::category_id.eq(cat_id));

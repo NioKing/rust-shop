@@ -38,8 +38,8 @@ pub struct UpdateDiscount {
     pub title: Option<String>,
     pub discount_type: Option<String>,
     pub amount: Option<bigdecimal::BigDecimal>,
-    pub start_date: Option<chrono::NaiveDateTime>,
-    pub end_date: Option<chrono::NaiveDateTime>,
+    // pub start_date: Option<chrono::NaiveDateTime>,
+    // pub end_date: Option<chrono::NaiveDateTime>,
     pub is_active: Option<bool>,
     pub applies_to_all: Option<bool>,
 }
