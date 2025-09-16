@@ -3,6 +3,7 @@ mod auth;
 mod cart;
 mod category;
 mod discount;
+mod notification;
 mod pool;
 mod product;
 mod utils;

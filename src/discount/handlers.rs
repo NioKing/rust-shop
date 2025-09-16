@@ -74,6 +74,22 @@ pub async fn create_discount(
         .await
         .map_err(internal_error)?;
 
+    let event = serde_json::json!({
+        "event": "discount_created",
+        "id": res.id,
+        "title": res.title,
+        "amount": res.amount,
+        "start_date": res.start_date,
+        "end_date": res.end_date,
+        "discount_type": res.discount_type
+    });
+
+    if let Err(er) =
+        crate::notification::handlers::publish_event("notifications", &event.to_string()).await
+    {
+        eprintln!("Failed to publish event: {:?}", er);
+    }
+
     Ok(Json(res))
 }
 

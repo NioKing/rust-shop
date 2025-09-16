@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+lapin = "3.6.0"
 anyhow = "1.0.98"
 axum = { version = "0.8.4", features = ["multipart"] }
 axum-extra = { version = "0.10.1", features = ["typed-header"] }
@@ -39,3 +40,5 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 uuid = { version = "1.16.0", features = ["serde", "v4"] }
 validator = { version = "0.20.0", features = ["derive"] }
+tokio-executor-trait = "3.1.0"
+tokio-reactor-trait = "4.1.1"
