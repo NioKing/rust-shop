@@ -6,6 +6,7 @@ mod discount;
 mod notification;
 mod pool;
 mod product;
+mod rmq;
 mod utils;
 
 use axum::{

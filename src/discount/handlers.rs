@@ -81,12 +81,10 @@ pub async fn create_discount(
         "amount": res.amount,
         "start_date": res.start_date,
         "end_date": res.end_date,
-        "discount_type": res.discount_type
+        "discount_type": res.discount_type.to_lowercase()
     });
 
-    if let Err(er) =
-        crate::notification::handlers::publish_event("notifications", &event.to_string()).await
-    {
+    if let Err(er) = crate::rmq::client::publish_event("notifications", &event.to_string()).await {
         eprintln!("Failed to publish event: {:?}", er);
     }
 
