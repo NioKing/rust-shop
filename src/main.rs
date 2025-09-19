@@ -69,6 +69,18 @@ async fn main() -> Result<(), String> {
         None => TcpListener::bind("127.0.0.1:3000").await.unwrap(),
     };
 
+    tokio::spawn(async move {
+        if let Err(er) = rmq::client::consume(
+            "notifications",
+            "discount_consumer",
+            notification::handlers::send_email,
+        )
+        .await
+        {
+            eprintln!("Error: {:?}", er);
+        }
+    });
+
     println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
     Ok(())

@@ -12,6 +12,8 @@ use diesel::{dsl::sql, prelude::*};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 
+const QUEUE_NAME: &str = "notifications";
+
 pub async fn get_all_discounts(
     State(pool): State<Pool>,
 ) -> Result<Json<DiscountWithProductsResponse>, (StatusCode, String)> {
@@ -51,7 +53,7 @@ pub async fn get_all_discounts(
 
 pub async fn create_discount(
     State(pool): State<Pool>,
-    Json(payload): Json<NewDiscount>,
+    Json(mut payload): Json<NewDiscount>,
 ) -> Result<Json<Discount>, (StatusCode, String)> {
     use axum_shop::schema::discounts;
 
@@ -67,6 +69,8 @@ pub async fn create_discount(
         return Err((StatusCode::BAD_REQUEST, "Wrong discount_type".to_owned()));
     }
 
+    payload.discount_type = payload.discount_type.to_lowercase();
+
     let res = diesel::insert_into(discounts::table)
         .values(&payload)
         .returning(Discount::as_returning())
@@ -81,10 +85,10 @@ pub async fn create_discount(
         "amount": res.amount,
         "start_date": res.start_date,
         "end_date": res.end_date,
-        "discount_type": res.discount_type.to_lowercase()
+        "discount_type": res.discount_type
     });
 
-    if let Err(er) = crate::rmq::client::publish_event("notifications", &event.to_string()).await {
+    if let Err(er) = crate::rmq::client::publish_event(QUEUE_NAME, &event.to_string()).await {
         eprintln!("Failed to publish event: {:?}", er);
     }
 
