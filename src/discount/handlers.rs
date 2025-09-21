@@ -79,6 +79,7 @@ pub async fn create_discount(
         .map_err(internal_error)?;
 
     let event = serde_json::json!({
+        "type": "Discount",
         "event": "discount_created",
         "id": res.id,
         "title": res.title,

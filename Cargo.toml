@@ -43,3 +43,5 @@ validator = { version = "0.20.0", features = ["derive"] }
 tokio-executor-trait = "3.1.0"
 tokio-reactor-trait = "4.1.1"
 futures-util = "0.3.31"
+lettre = "0.11.18"
+tera = "1.20.0"

@@ -51,13 +51,13 @@ pub async fn publish_event(queue: &str, payload: &str) -> Result<(), (StatusCode
 }
 
 pub async fn consume<
-    T: for<'a> serde::Deserialize<'a> + std::fmt::Debug,
-    H: Fn(T) -> Fut + Send + Sync + 'static,
+    // T: for<'a> serde::Deserialize<'a> + std::fmt::Debug,
+    // H: Fn(T) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Result<(), String>> + Send,
 >(
     queue: &str,
     consumer_tag: &str,
-    handler: H,
+    handler: impl Fn(crate::notification::models::Notification) -> Fut + Send + Sync + 'static,
 ) -> Result<(), (StatusCode, String)> {
     let url = env::var("RMQ_URL").map_err(internal_error)?;
 
@@ -86,14 +86,18 @@ pub async fn consume<
         let delivery = delivery.map_err(internal_error)?;
         let data = String::from_utf8_lossy(&delivery.data);
 
-        println!("Data recieved: {}", data);
+        println!("Data received: {}", data);
 
-        if let Ok(notification) = serde_json::from_str::<T>(&data) {
+        if let Ok(notification) =
+            serde_json::from_str::<crate::notification::models::Notification>(&data)
+        {
             println!("Parsed data: {:?}", notification);
 
             if let Err(er) = handler(notification).await {
-                eprint!("Failed so send email: {:?}", er);
+                eprint!("Failed so send an email: {:?}", er);
             }
+        } else {
+            eprintln!("Failed to parse a message: {}", data);
         }
 
         delivery
