@@ -5,26 +5,26 @@ use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
 use std::env;
+use tera::{Context, Tera};
 
 pub async fn send_email(notification: Notification) -> Result<(), String> {
     println!("Data: {:?}", notification);
 
     match notification {
         Notification::Discount(data) => {
+            let html_body = render_html(&data, "discount")?;
+
             build_email(
                 "kenny3850",
                 "kenny3850@gmail.com",
                 "Check out our new discounts",
-                "Hi, new discount has arrived",
+                html_body,
             )?;
         }
         Notification::WelcomeUser(data) => {
-            build_email(
-                "kenny3850",
-                "kenny3850@gmail.com",
-                "Check out our new discounts",
-                "Hi, new discount has arrived",
-            )?;
+            let html_body = render_html(&data, "welcome")?;
+
+            build_email(&data.email, &data.email, "Welcome to Rust shop!", html_body)?;
         }
         _ => return Err("Failed to send an email".to_owned()),
     }
@@ -36,7 +36,7 @@ fn build_email(
     receiver_name: &str,
     receiver_email: &str,
     subject: &str,
-    body: &str,
+    body: String,
 ) -> Result<(), String> {
     let email = Message::builder()
         .from(Mailbox::new(
@@ -58,8 +58,8 @@ fn build_email(
                 .map_err(|e| format!("Failed to parse receiver email: {}", e))?,
         ))
         .subject(subject)
-        .header(ContentType::TEXT_PLAIN)
-        .body("Hi and welcome to rust shop".to_owned())
+        .header(ContentType::TEXT_HTML)
+        .body(body)
         .map_err(|e| format!("Failed to build a message: {}", e))?;
 
     let creds = Credentials::new(
@@ -79,4 +79,20 @@ fn build_email(
     println!("email has been sent");
 
     Ok(())
+}
+
+fn render_html<T>(data: &T, filename: &str) -> Result<String, String>
+where
+    T: std::fmt::Debug + serde::Serialize,
+{
+    let tera = Tera::new("src/templates/**/*").map_err(|e| format!("Template not found: {}", e))?;
+
+    let mut ctx = Context::new();
+    ctx.insert("data", data);
+
+    let html_body = tera
+        .render(&format!("notifications/{}.html", filename), &ctx)
+        .map_err(|e| format!("Failed to render html body: {}", e))?;
+
+    Ok(html_body)
 }

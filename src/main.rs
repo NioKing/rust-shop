@@ -81,6 +81,14 @@ async fn main() -> Result<(), String> {
         }
     });
 
+    tokio::spawn(async move {
+        if let Err(er) =
+            rmq::client::consume("user", "user_consumer", notification::handlers::send_email).await
+        {
+            eprintln!("Error: {:?}", er);
+        }
+    });
+
     println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
     Ok(())

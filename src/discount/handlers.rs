@@ -87,9 +87,10 @@ pub async fn create_discount(
         "start_date": res.start_date,
         "end_date": res.end_date,
         "discount_type": res.discount_type
-    });
+    })
+    .to_string();
 
-    if let Err(er) = crate::rmq::client::publish_event(QUEUE_NAME, &event.to_string()).await {
+    if let Err(er) = crate::rmq::client::publish_event(QUEUE_NAME, &event).await {
         eprintln!("Failed to publish event: {:?}", er);
     }
 

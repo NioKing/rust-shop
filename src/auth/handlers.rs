@@ -31,6 +31,8 @@ use std::env;
 use std::time::Instant;
 use uuid::Uuid;
 
+const QUEUE_NAME: &str = "user";
+
 pub async fn create_user(
     State(pool): State<Pool>,
     ValidatedJson(payload): ValidatedJson<NewUser>,
@@ -72,6 +74,17 @@ pub async fn create_user(
         .execute(&mut conn)
         .await
         .map_err(internal_error)?;
+
+    let event = serde_json::json!({
+        "type": "WelcomeUser",
+        "event": "user_created",
+        "email": res.email,
+    })
+    .to_string();
+
+    if let Err(er) = crate::rmq::client::publish_event(QUEUE_NAME, &event).await {
+        eprintln!("Failed to publish event: {:?}", er);
+    }
 
     Ok(Json(res))
 }
