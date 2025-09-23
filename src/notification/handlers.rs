@@ -7,6 +7,8 @@ use lettre::{Message, SmtpTransport, Transport};
 use std::env;
 use tera::{Context, Tera};
 
+const NOTIFICATION_TEMPLATES_PATH: &str = "src/templates/**/*";
+
 pub async fn send_email(notification: Notification) -> Result<(), String> {
     println!("Data: {:?}", notification);
 
@@ -85,7 +87,8 @@ fn render_html<T>(data: &T, filename: &str) -> Result<String, String>
 where
     T: std::fmt::Debug + serde::Serialize,
 {
-    let tera = Tera::new("src/templates/**/*").map_err(|e| format!("Template not found: {}", e))?;
+    let tera =
+        Tera::new(NOTIFICATION_TEMPLATES_PATH).map_err(|e| format!("Template not found: {}", e))?;
 
     let mut ctx = Context::new();
     ctx.insert("data", data);
