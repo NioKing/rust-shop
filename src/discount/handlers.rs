@@ -242,3 +242,20 @@ async fn get_discount_with_products(
 
     Ok(res)
 }
+
+pub async fn delete_discount(
+    State(pool): State<Pool>,
+    Path(id): Path<i32>,
+) -> Result<Json<Discount>, (StatusCode, String)> {
+    use axum_shop::schema::discounts;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let res = diesel::delete(discounts::table.filter(discounts::id.eq(&id)))
+        .returning(Discount::as_returning())
+        .get_result(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
+}
