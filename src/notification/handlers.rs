@@ -1,5 +1,4 @@
 use super::models::{DiscountNotification, Notification};
-use axum::http::StatusCode;
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
@@ -7,14 +6,46 @@ use lettre::{Message, SmtpTransport, Transport};
 use std::env;
 use tera::{Context, Tera};
 
+use crate::utils::{internal_error, types::Pool};
+use axum::{
+    extract::{Json, Path, State},
+    http::StatusCode,
+};
+use diesel::{dsl::sql, prelude::*};
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
+
 const NOTIFICATION_TEMPLATES_PATH: &str = "src/templates/**/*";
 
-pub async fn send_email(notification: Notification) -> Result<(), String> {
-    println!("Data: {:?}", notification);
+pub async fn send_email(notification: Notification, pool: Pool) -> Result<(), String> {
+    use axum_shop::schema::users;
+
+    let mut conn = pool
+        .get()
+        .await
+        .map_err(|e| format!("Failed to get pool: {}", e))?;
 
     match notification {
         Notification::Discount(data) => {
+            let users: Vec<String> = users::table
+                .select(users::email)
+                .load(&mut conn)
+                .await
+                .map_err(|e| format!("Failed to get users: {}", e))?;
+
             let html_body = render_html(&data, "discount")?;
+
+            // for user in users {
+            //     let name = &user.split("@").collect::<Vec<_>>()[0];
+            //     let email = &user;
+            //
+            //     build_email(
+            //         name,
+            //         email,
+            //         "Checko out our new discount",
+            //         html_body.clone(),
+            //     )?;
+            // }
 
             build_email(
                 "kenny3850",

@@ -5,7 +5,7 @@ use std::env;
 use tokio_executor_trait::Tokio as TokioExec;
 use tokio_reactor_trait::Tokio as TokioReactor;
 
-use crate::utils::internal_error;
+use crate::utils::{internal_error, types::Pool};
 
 async fn connect(url: &str) -> Result<Connection, (StatusCode, String)> {
     let conn = Connection::connect(
@@ -57,7 +57,8 @@ pub async fn consume<
 >(
     queue: &str,
     consumer_tag: &str,
-    handler: impl Fn(crate::notification::models::Notification) -> Fut + Send + Sync + 'static,
+    pool: crate::utils::types::Pool,
+    handler: impl Fn(crate::notification::models::Notification, Pool) -> Fut + Send + Sync + 'static,
 ) -> Result<(), (StatusCode, String)> {
     let url = env::var("RMQ_URL").map_err(internal_error)?;
 
@@ -93,11 +94,13 @@ pub async fn consume<
         {
             println!("Parsed data: {:?}", notification);
 
-            if let Err(er) = handler(notification).await {
-                eprint!("Failed so send an email: {:?}", er);
+            let pool = pool.clone();
+
+            if let Err(er) = handler(notification, pool).await {
+                eprintln!("Failed so send an email: {:?}", er);
             }
         } else {
-            eprintln!("Failed to parse a message: {}", data);
+            eprintln!("Failed to parse a message: {:?}", data);
         }
 
         delivery
@@ -107,4 +110,13 @@ pub async fn consume<
     }
 
     Ok(())
+}
+
+pub fn spawn_consumer(queue: &'static str, tag: &'static str, pool: Pool) {
+    tokio::spawn(async move {
+        if let Err(er) = consume(queue, tag, pool, crate::notification::handlers::send_email).await
+        {
+            eprintln!("Error: {:?}", er);
+        }
+    });
 }

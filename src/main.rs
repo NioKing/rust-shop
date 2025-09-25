@@ -26,7 +26,7 @@ use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{pool::get_pool, utils::internal_error};
+use crate::{pool::get_pool, rmq::client, utils::internal_error};
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -53,7 +53,7 @@ async fn main() -> Result<(), String> {
         .merge(cart::routes::get_routes())
         .merge(discount::routes::get_routes())
         .layer(middleware::from_fn(utils::print_req_res))
-        .with_state(pool);
+        .with_state(pool.clone());
 
     let app = Router::new().nest("/api", routes);
     let app = app.fallback(utils::handler_404);
@@ -69,25 +69,8 @@ async fn main() -> Result<(), String> {
         None => TcpListener::bind("127.0.0.1:3000").await.unwrap(),
     };
 
-    tokio::spawn(async move {
-        if let Err(er) = rmq::client::consume(
-            "notifications",
-            "discount_consumer",
-            notification::handlers::send_email,
-        )
-        .await
-        {
-            eprintln!("Error: {:?}", er);
-        }
-    });
-
-    tokio::spawn(async move {
-        if let Err(er) =
-            rmq::client::consume("user", "user_consumer", notification::handlers::send_email).await
-        {
-            eprintln!("Error: {:?}", er);
-        }
-    });
+    client::spawn_consumer("notifications", "discount_consumer", pool.clone());
+    client::spawn_consumer("user", "user_consumer", pool.clone());
 
     println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();

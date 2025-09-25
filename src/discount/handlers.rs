@@ -2,8 +2,7 @@ use super::models::{
     Discount, DiscountProduct, DiscountType, DiscountWithProducts, DiscountWithProductsResponse,
     NewDiscount, ProductsForDiscount, UpdateDiscount,
 };
-use crate::utils::types::Pool;
-use crate::{discount, utils::internal_error};
+use crate::utils::{internal_error, types::Pool};
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
