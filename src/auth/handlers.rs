@@ -23,7 +23,7 @@ use bcrypt::{BcryptError, BcryptResult, DEFAULT_COST, hash, verify};
 use chrono::{Duration, Local, TimeZone, Utc};
 use diesel::dsl::sql;
 use diesel::{prelude::*, update};
-use diesel_async::RunQueryDsl;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -47,31 +47,38 @@ pub async fn create_user(
 
     let user_id = Uuid::new_v4();
 
-    let user_data = User {
-        id: user_id,
-        email: payload.email,
-        password_hash: hashed_pass,
-        hashed_rt: None,
-        role: "user".to_owned(),
-    };
+    let res = conn
+        .transaction::<SafeUser, diesel::result::Error, _>(move |mut conn| {
+            Box::pin(async move {
+                let user_data = User {
+                    id: user_id,
+                    email: payload.email,
+                    password_hash: hashed_pass,
+                    hashed_rt: None,
+                    role: "user".to_owned(),
+                };
 
-    let res = diesel::insert_into(users::table)
-        .values(&user_data)
-        .returning(SafeUser::as_returning())
-        .get_result(&mut conn)
-        .await
-        .map_err(internal_error)?;
+                let user = diesel::insert_into(users::table)
+                    .values(&user_data)
+                    .returning(SafeUser::as_returning())
+                    .get_result(&mut conn)
+                    .await?;
 
-    let updated_at = Local::now().date_naive();
+                let updated_at = Local::now().date_naive();
 
-    let cart_data = NewCart {
-        user_id,
-        updated_at,
-    };
+                let cart_data = NewCart {
+                    user_id,
+                    updated_at,
+                };
 
-    diesel::insert_into(carts::table)
-        .values(&cart_data)
-        .execute(&mut conn)
+                diesel::insert_into(carts::table)
+                    .values(&cart_data)
+                    .execute(&mut conn)
+                    .await?;
+
+                Ok(user)
+            })
+        })
         .await
         .map_err(internal_error)?;
 

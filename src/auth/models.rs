@@ -12,7 +12,7 @@ use serde_json::json;
 use std::env;
 use validator::Validate;
 
-#[derive(Queryable, Selectable, Debug, Serialize, Insertable, AsChangeset)]
+#[derive(Queryable, Selectable, Debug, Serialize, Insertable, AsChangeset, Validate)]
 #[diesel(table_name=users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
@@ -28,7 +28,12 @@ pub struct User {
 pub struct NewUser {
     #[validate(email)]
     pub email: String,
-    #[validate(length(min = 6, message = "Your password should be at least 6 symbols long"))]
+    #[validate(length(
+        min = 6,
+        max = 50,
+        message = "Your password should be at least 6 symbols long"
+    ))]
+    #[serde(rename = "password")]
     pub password_hash: String,
 }
 
