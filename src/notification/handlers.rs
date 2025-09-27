@@ -44,7 +44,7 @@ pub async fn send_email(notification: Notification, pool: Pool) -> Result<(), St
             //         email,
             //         "Checko out our new discount",
             //         html_body.clone(),
-            //     )?;
+            //     ).await?;
             // }
 
             build_email(
@@ -52,12 +52,13 @@ pub async fn send_email(notification: Notification, pool: Pool) -> Result<(), St
                 "kenny3850@gmail.com",
                 "Check out our new discounts",
                 html_body,
-            )?;
+            )
+            .await?;
         }
         Notification::WelcomeUser(data) => {
             let html_body = render_html(&data, "welcome")?;
 
-            build_email(&data.email, &data.email, "Welcome to Rust shop!", html_body)?;
+            build_email(&data.email, &data.email, "Welcome to Rust shop!", html_body).await?;
         }
         _ => return Err("Failed to send an email".to_owned()),
     }
@@ -65,7 +66,7 @@ pub async fn send_email(notification: Notification, pool: Pool) -> Result<(), St
     Ok(())
 }
 
-fn build_email(
+async fn build_email(
     receiver_name: &str,
     receiver_email: &str,
     subject: &str,
@@ -105,9 +106,13 @@ fn build_email(
         .credentials(creds)
         .build();
 
-    mailer
-        .send(&email)
-        .map_err(|e| format!("failed to send an email: {}", e))?;
+    tokio::task::spawn_blocking(move || {
+        mailer
+            .send(&email)
+            .map_err(|e| format!("failed to send an email: {}", e))
+    })
+    .await
+    .map_err(|e| format!("Email send task has failed: {}", e))??;
 
     println!("email has been sent");
 
