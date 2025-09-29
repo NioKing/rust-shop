@@ -18,6 +18,17 @@ pub struct Profile {
     pub currency: String,
 }
 
+#[derive(Debug, Deserialize, AsChangeset)]
+#[diesel(table_name = profiles)]
+pub struct UpdateProfile {
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+    pub phone_number: Option<String>,
+    pub birth_date: Option<NaiveDate>,
+    pub language: Option<String>,
+    pub currency: Option<String>,
+}
+
 #[derive(Debug, Serialize, Queryable, Selectable, Insertable)]
 #[diesel(table_name = addresses)]
 #[diesel(check_for_backend(diesel::pg::Pg))]

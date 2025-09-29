@@ -7,8 +7,7 @@ use super::handlers;
 use crate::utils::types::Pool;
 
 pub fn get_routes() -> Router<Pool> {
-    Router::new().route(
-        "/users/{id}/profiles",
-        get(handlers::get_user_profile_by_id),
-    )
+    Router::new()
+        .route("/users/{id}/profile", get(handlers::get_user_profile_by_id))
+        .route("/profiles/{id}", patch(handlers::update_profile))
 }
