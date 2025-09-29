@@ -1,4 +1,6 @@
+use axum_shop::schema::user_subscriptions;
 use chrono::NaiveDateTime;
+use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -23,4 +25,14 @@ pub struct WelcomeNotification {
 pub enum Notification {
     Discount(DiscountNotification),
     WelcomeUser(WelcomeNotification),
+}
+
+#[derive(Debug, Serialize, Queryable, Selectable, Insertable)]
+#[diesel(table_name = user_subscriptions)]
+pub struct UserSubscriptions {
+    pub user_id: uuid::Uuid,
+    pub channel: String,
+    pub orders_notifications: bool,
+    pub discount_notifications: bool,
+    pub newsletter_notifications: bool,
 }

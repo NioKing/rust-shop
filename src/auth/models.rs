@@ -6,10 +6,7 @@ use axum::{
 };
 use axum_shop::schema::users;
 use diesel::prelude::*;
-use jsonwebtoken::{DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::env;
 use validator::Validate;
 
 #[derive(Queryable, Selectable, Debug, Serialize, Insertable, AsChangeset, Validate)]

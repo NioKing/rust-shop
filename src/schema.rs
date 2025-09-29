@@ -1,6 +1,25 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    addresses (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        #[max_length = 50]
+        label -> Nullable<Varchar>,
+        address_line -> Text,
+        #[max_length = 30]
+        city -> Nullable<Varchar>,
+        #[max_length = 30]
+        postal_code -> Nullable<Varchar>,
+        #[max_length = 30]
+        country -> Nullable<Varchar>,
+        is_default -> Nullable<Bool>,
+        created_at -> Nullable<Timestamptz>,
+        updated_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
     cart_products (product_id, cart_id) {
         product_id -> Int4,
         cart_id -> Int4,
@@ -72,6 +91,39 @@ diesel::table! {
 }
 
 diesel::table! {
+    profiles (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        #[max_length = 50]
+        first_name -> Nullable<Varchar>,
+        #[max_length = 50]
+        last_name -> Nullable<Varchar>,
+        #[max_length = 20]
+        phone_number -> Nullable<Varchar>,
+        birth_date -> Nullable<Date>,
+        #[max_length = 10]
+        language -> Varchar,
+        #[max_length = 10]
+        currency -> Varchar,
+        created_at -> Nullable<Timestamptz>,
+        updated_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::table! {
+    user_subscriptions (id) {
+        id -> Int4,
+        user_id -> Uuid,
+        channel -> Varchar,
+        orders_notifications -> Nullable<Bool>,
+        discount_notifications -> Nullable<Bool>,
+        newsletter_notifications -> Nullable<Bool>,
+        created_at -> Nullable<Timestamp>,
+        updated_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
     users (id) {
         id -> Uuid,
         #[max_length = 40]
@@ -84,6 +136,7 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(addresses -> users (user_id));
 diesel::joinable!(cart_products -> carts (cart_id));
 diesel::joinable!(cart_products -> products (product_id));
 diesel::joinable!(carts -> users (user_id));
@@ -93,8 +146,11 @@ diesel::joinable!(discount_products -> discounts (discount_id));
 diesel::joinable!(discount_products -> products (product_id));
 diesel::joinable!(product_categories -> categories (category_id));
 diesel::joinable!(product_categories -> products (product_id));
+diesel::joinable!(profiles -> users (user_id));
+diesel::joinable!(user_subscriptions -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    addresses,
     cart_products,
     carts,
     categories,
@@ -103,5 +159,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     discounts,
     product_categories,
     products,
+    profiles,
+    user_subscriptions,
     users,
 );

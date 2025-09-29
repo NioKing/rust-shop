@@ -58,7 +58,7 @@ pub async fn send_email(notification: Notification, pool: Pool) -> Result<(), St
         Notification::WelcomeUser(data) => {
             let html_body = render_html(&data, "welcome")?;
 
-            build_email(&data.email, &data.email, "Welcome to Rust shop!", html_body).await?;
+            // build_email(&data.email, &data.email, "Welcome to Rust shop!", html_body).await?;
         }
         _ => return Err("Failed to send an email".to_owned()),
     }

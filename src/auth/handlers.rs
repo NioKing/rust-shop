@@ -38,8 +38,10 @@ pub async fn create_user(
     ValidatedJson(payload): ValidatedJson<NewUser>,
 ) -> Result<Json<SafeUser>, (StatusCode, String)> {
     use crate::cart::models::NewCart;
-    use axum_shop::schema::carts;
-    use axum_shop::schema::users;
+    use crate::notification::models::UserSubscriptions;
+    use crate::user::models::Profile;
+
+    use axum_shop::schema::{carts, profiles, user_subscriptions, users};
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
@@ -71,8 +73,37 @@ pub async fn create_user(
                     updated_at,
                 };
 
+                let subs_data = UserSubscriptions {
+                    user_id,
+                    channel: "email".to_owned(),
+                    orders_notifications: true,
+                    discount_notifications: true,
+                    newsletter_notifications: true,
+                };
+
+                let profile_data = Profile {
+                    id: uuid::Uuid::new_v4(),
+                    user_id,
+                    first_name: None,
+                    last_name: None,
+                    phone_number: None,
+                    birth_date: None,
+                    language: "en".to_owned(),
+                    currency: "usd".to_owned(),
+                };
+
                 diesel::insert_into(carts::table)
                     .values(&cart_data)
+                    .execute(&mut conn)
+                    .await?;
+
+                diesel::insert_into(user_subscriptions::table)
+                    .values(&subs_data)
+                    .execute(&mut conn)
+                    .await?;
+
+                diesel::insert_into(profiles::table)
+                    .values(&profile_data)
                     .execute(&mut conn)
                     .await?;
 

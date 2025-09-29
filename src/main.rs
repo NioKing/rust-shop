@@ -7,6 +7,7 @@ mod notification;
 mod pool;
 mod product;
 mod rmq;
+mod user;
 mod utils;
 
 use axum::{
@@ -52,6 +53,7 @@ async fn main() -> Result<(), String> {
         .merge(auth::routes::get_routes())
         .merge(cart::routes::get_routes())
         .merge(discount::routes::get_routes())
+        .merge(user::routes::get_routes())
         .layer(middleware::from_fn(utils::print_req_res))
         .with_state(pool.clone());
 
