@@ -31,7 +31,6 @@ pub async fn get_user_profile_by_id(
 
 pub async fn get_current_user_profile(
     State(pool): State<Pool>,
-    Path(id): Path<Uuid>,
     claims: AccessTokenClaims,
 ) -> Result<Json<Profile>, (StatusCode, String)> {
     use axum_shop::schema::profiles;
