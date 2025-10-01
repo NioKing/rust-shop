@@ -41,3 +41,23 @@ pub struct Address {
     pub postal_code: Option<String>,
     pub country: Option<String>,
 }
+
+#[derive(Debug, Deserialize, AsChangeset)]
+#[diesel(table_name = addresses)]
+pub struct NewAddress {
+    pub label: Option<String>,
+    pub address_line: String,
+    pub city: Option<String>,
+    pub postal_code: Option<String>,
+    pub country: Option<String>,
+}
+
+#[derive(Debug, Deserialize, AsChangeset)]
+#[diesel(table_name = addresses)]
+pub struct UpdateAddress {
+    pub label: Option<String>,
+    pub address_line: Option<String>,
+    pub city: Option<String>,
+    pub postal_code: Option<String>,
+    pub country: Option<String>,
+}

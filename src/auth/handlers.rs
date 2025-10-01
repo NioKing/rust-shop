@@ -82,7 +82,7 @@ pub async fn create_user(
                 };
 
                 let profile_data = Profile {
-                    id: uuid::Uuid::new_v4(),
+                    id: Uuid::new_v4(),
                     user_id,
                     first_name: None,
                     last_name: None,
