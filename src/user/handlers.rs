@@ -222,3 +222,28 @@ pub async fn delete_current_user_address(
 
     Ok(Json(res))
 }
+
+pub async fn get_current_user_addresses(
+    State(pool): State<Pool>,
+    claims: AccessTokenClaims,
+) -> Result<Json<Vec<Address>>, (StatusCode, String)> {
+    use axum_shop::schema::addresses;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Failed to parse user id".to_owned(),
+        )
+    })?;
+
+    let res = addresses::table
+        .filter(addresses::user_id.eq(&user_id))
+        .select(Address::as_select())
+        .load(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
+}

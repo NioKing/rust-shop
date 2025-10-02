@@ -12,14 +12,7 @@ mod utils;
 
 use axum::{
     Router,
-    http::StatusCode,
     middleware::{self},
-    routing::{delete, get, patch, post},
-};
-use axum_shop::schema::products;
-use diesel_async::{
-    AsyncPgConnection,
-    pooled_connection::{AsyncDieselConnectionManager, bb8},
 };
 use listenfd::ListenFd;
 use std::env;
@@ -27,13 +20,14 @@ use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{pool::get_pool, rmq::client, utils::internal_error};
+use crate::{pool::get_pool, rmq::client};
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
     dotenv::dotenv().ok();
 
-    std::fs::create_dir_all("uploads").expect("Failed to create uploads directory");
+    std::fs::create_dir_all("uploads")
+        .map_err(|e| format!("Failed to create a directory: {}", e))?;
 
     let pool = get_pool().await?;
 
@@ -76,5 +70,6 @@ async fn main() -> Result<(), String> {
 
     println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
+
     Ok(())
 }

@@ -20,8 +20,9 @@ pub fn get_routes() -> Router<Pool> {
         )
         .route("/addresses/{id}", patch(handlers::update_address))
         .route(
-            "/users/addresses/{id}",
+            "/me/addresses/{id}",
             patch(handlers::update_current_user_address)
                 .delete(handlers::delete_current_user_address),
         )
+        .route("/me/addresses", get(handlers::get_current_user_addresses))
 }
