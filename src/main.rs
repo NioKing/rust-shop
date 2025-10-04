@@ -65,8 +65,19 @@ async fn main() -> Result<(), String> {
         None => TcpListener::bind("127.0.0.1:3000").await.unwrap(),
     };
 
-    client::spawn_consumer("notifications", "discount_consumer", pool.clone());
-    client::spawn_consumer("user", "user_consumer", pool.clone());
+    client::spawn_consumer(
+        "notifications",
+        "discount_consumer",
+        pool.clone(),
+        crate::notification::handlers::send_email,
+    );
+
+    client::spawn_consumer(
+        "user",
+        "user_consumer",
+        pool.clone(),
+        crate::notification::handlers::send_email,
+    );
 
     println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();

@@ -51,14 +51,14 @@ pub async fn publish_event(queue: &str, payload: &str) -> Result<(), (StatusCode
 }
 
 pub async fn consume<
-    // T: for<'a> serde::Deserialize<'a> + std::fmt::Debug,
+    T: for<'a> serde::Deserialize<'a> + std::fmt::Debug,
     // H: Fn(T) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Result<(), String>> + Send,
 >(
     queue: &str,
     consumer_tag: &str,
     pool: crate::utils::types::Pool,
-    handler: impl Fn(crate::notification::models::Notification, Pool) -> Fut + Send + Sync + 'static,
+    handler: impl Fn(T, Pool) -> Fut + Send + Sync + 'static,
 ) -> Result<(), (StatusCode, String)> {
     let url = env::var("RMQ_URL").map_err(internal_error)?;
 
@@ -89,9 +89,7 @@ pub async fn consume<
 
         println!("Data received: {}", data);
 
-        if let Ok(notification) =
-            serde_json::from_str::<crate::notification::models::Notification>(&data)
-        {
+        if let Ok(notification) = serde_json::from_str::<T>(&data) {
             println!("Parsed data: {:?}", notification);
 
             let pool = pool.clone();
@@ -112,10 +110,17 @@ pub async fn consume<
     Ok(())
 }
 
-pub fn spawn_consumer(queue: &'static str, tag: &'static str, pool: Pool) {
+pub fn spawn_consumer<
+    T: for<'a> serde::Deserialize<'a> + std::fmt::Debug + Send + Sync,
+    Fut: Future<Output = Result<(), String>> + Send,
+>(
+    queue: &'static str,
+    tag: &'static str,
+    pool: Pool,
+    handler: impl Fn(T, Pool) -> Fut + Send + Sync + 'static,
+) {
     tokio::spawn(async move {
-        if let Err(er) = consume(queue, tag, pool, crate::notification::handlers::send_email).await
-        {
+        if let Err(er) = consume(queue, tag, pool, handler).await {
             eprintln!("Error: {:?}", er);
         }
     });
