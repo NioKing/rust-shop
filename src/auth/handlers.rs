@@ -360,21 +360,6 @@ pub async fn refresh_token(
 
     if let Some(hash) = &user.hashed_rt {
         validate_hash(token.to_owned(), hash.to_owned()).await?;
-        // match validate_hash(token.to_owned(), hash.to_owned()).await {
-        //     Ok(_) => Ok::<(), (StatusCode, String)>(()),
-        //     Err(_) => {
-        //         diesel::update(users::table.find(&id))
-        //             .set(users::hashed_rt.eq(None::<String>))
-        //             .execute(&mut conn)
-        //             .await
-        //             .map_err(internal_error)?;
-        //
-        //         return Err((
-        //             StatusCode::UNAUTHORIZED,
-        //             "Invalid or expired refresh token".to_owned(),
-        //         ));
-        //     }
-        // }
     } else {
         return Err((
             StatusCode::UNAUTHORIZED,
