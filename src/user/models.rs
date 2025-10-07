@@ -40,6 +40,7 @@ pub struct Address {
     pub city: Option<String>,
     pub postal_code: Option<String>,
     pub country: Option<String>,
+    pub is_default: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, AsChangeset)]
@@ -60,4 +61,5 @@ pub struct UpdateAddress {
     pub city: Option<String>,
     pub postal_code: Option<String>,
     pub country: Option<String>,
+    pub is_default: Option<bool>,
 }

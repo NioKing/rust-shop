@@ -100,23 +100,49 @@ pub async fn update_current_user_profile(
     Ok(Json(res))
 }
 
-pub async fn create_address(
+pub async fn create_address_for_current_user(
     State(pool): State<Pool>,
-    Path(id): Path<Uuid>,
+    claims: AccessTokenClaims,
+    // Path(id): Path<Uuid>,
     Json(payload): Json<NewAddress>,
 ) -> Result<Json<Address>, (StatusCode, String)> {
     use axum_shop::schema::addresses;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Failed to parse user id".to_owned(),
+        )
+    })?;
+
+    let current_default: i64 = addresses::table
+        .filter(
+            addresses::user_id
+                .eq(&user_id)
+                .and(addresses::is_default.eq(true)),
+        )
+        .select(diesel::dsl::count_star())
+        .get_result(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    println!("cur def: {}", current_default);
+
     let address = Address {
         id: Uuid::new_v4(),
-        user_id: id,
+        user_id,
         label: payload.label,
         address_line: payload.address_line,
         city: payload.city,
         postal_code: payload.postal_code,
         country: payload.country,
+        is_default: if current_default <= 0 {
+            Some(true)
+        } else {
+            Some(false)
+        },
     };
 
     let res = diesel::insert_into(addresses::table)
@@ -183,6 +209,28 @@ pub async fn update_current_user_address(
         )
     })?;
 
+    if let Some(is_default) = payload.is_default {
+        if is_default == true {
+            let cur_default: i64 = addresses::table
+                .filter(
+                    addresses::user_id
+                        .eq(&user_id)
+                        .and(addresses::is_default.eq(true)),
+                )
+                .select(diesel::dsl::count_star())
+                .get_result(&mut conn)
+                .await
+                .map_err(internal_error)?;
+
+            if cur_default > 0 {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "Only one address can be set as default".to_owned(),
+                ));
+            }
+        }
+    };
+
     let res = diesel::update(
         addresses::table.filter(addresses::user_id.eq(&user_id).and(addresses::id.eq(&id))),
     )
@@ -242,6 +290,35 @@ pub async fn get_current_user_addresses(
         .filter(addresses::user_id.eq(&user_id))
         .select(Address::as_select())
         .load(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
+}
+
+pub async fn get_current_user_default_address(
+    State(pool): State<Pool>,
+    claims: AccessTokenClaims,
+) -> Result<Json<Address>, (StatusCode, String)> {
+    use axum_shop::schema::addresses;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            "Failed to parse user id".to_owned(),
+        )
+    })?;
+
+    let res = addresses::table
+        .filter(
+            addresses::user_id
+                .eq(&user_id)
+                .and(addresses::is_default.eq(true)),
+        )
+        .select(Address::as_select())
+        .get_result(&mut conn)
         .await
         .map_err(internal_error)?;
 

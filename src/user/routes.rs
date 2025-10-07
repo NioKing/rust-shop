@@ -14,15 +14,23 @@ pub fn get_routes() -> Router<Pool> {
             "/me/profile",
             patch(handlers::update_current_user_profile).get(handlers::get_current_user_profile),
         )
-        .route(
-            "/users/{id}/addresses",
-            post(handlers::create_address).get(handlers::get_user_addresses_by_id),
-        )
+        // .route(
+        //     "/users/{id}/addresses",
+        //     post(handlers::create_address).get(handlers::get_user_addresses_by_id),
+        // )
         .route("/addresses/{id}", patch(handlers::update_address))
         .route(
             "/me/addresses/{id}",
             patch(handlers::update_current_user_address)
                 .delete(handlers::delete_current_user_address),
         )
-        .route("/me/addresses", get(handlers::get_current_user_addresses))
+        .route(
+            "/me/addresses",
+            get(handlers::get_current_user_addresses)
+                .post(handlers::create_address_for_current_user),
+        )
+        .route(
+            "/me/addresses/default",
+            get(handlers::get_current_user_default_address),
+        )
 }
