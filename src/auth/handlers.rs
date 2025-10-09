@@ -512,7 +512,7 @@ pub async fn logout(
     let mut conn = pool.get().await.map_err(internal_error)?;
     let id = Uuid::parse_str(&claims.sub).unwrap();
 
-    diesel::update(users::table.filter(users::id.eq(id)))
+    diesel::update(users::table.filter(users::id.eq(id).and(users::hashed_rt.is_not_null())))
         .set(users::hashed_rt.eq(None::<String>))
         .execute(&mut conn)
         .await
