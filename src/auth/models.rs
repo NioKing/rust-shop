@@ -77,9 +77,10 @@ pub struct LoginUser {
 
 #[derive(Serialize, Debug)]
 pub struct SafeUserWithCart {
-    #[serde(flatten)]
     pub user: SafeUser,
-    pub cart: crate::cart::models::SafeCart,
+    pub cart: crate::cart::models::CartWithProducts,
+    pub address: Vec<crate::user::models::Address>,
+    pub profile: crate::user::models::Profile,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

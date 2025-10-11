@@ -29,7 +29,7 @@ pub struct UpdateProfile {
     pub currency: Option<String>,
 }
 
-#[derive(Debug, Serialize, Queryable, Selectable, Insertable)]
+#[derive(Debug, Serialize, Queryable, Selectable, Insertable, QueryableByName)]
 #[diesel(table_name = addresses)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Address {

@@ -246,49 +246,136 @@ pub async fn update_user_email_or_password(
 
 pub async fn get_all_users(
     State(pool): State<Pool>,
-) -> Result<Json<Vec<SafeUserWithCart>>, (StatusCode, String)> {
-    use crate::cart::models::SafeCart;
-    use axum_shop::schema::carts;
+) -> Result<Json<Vec<SafeUser>>, (StatusCode, String)> {
     use axum_shop::schema::users;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
     let rows = users::table
-        .inner_join(carts::table)
-        .select((SafeUser::as_select(), SafeCart::as_select()))
-        .load::<(SafeUser, SafeCart)>(&mut conn)
+        // .inner_join(carts::table)
+        // .inner_join(profiles::table)
+        // .left_join(cart_products::table.on(carts::id.eq(cart_products::cart_id)))
+        // .left_join(products::table.on(cart_products::product_id.eq(products::id)))
+        // .select((
+        //     SafeUser::as_select(),
+        //     Cart::as_select(),
+        //     Profile::as_select(),
+        //     sql::<diesel::sql_types::Json>(
+        //         "COALESCE(
+        //         json_agg(
+        //         json_build_object(
+        //             'id', products.id,
+        //             'title', products.title,
+        //             'price', products.price,
+        //             'description', products.description,
+        //             'image', products.image,
+        //             'quantity', cart_products.quantity
+        //         )
+        //     ) FILTER (WHERE products.id IS NOT NULL),
+        //     '[]'
+        // )",
+        //     ),
+        // ))
+        // .load::<(SafeUser, Cart, Profile, serde_json::Value)>(&mut conn)
+        .select(SafeUser::as_select())
+        .load(&mut conn)
         .await
         .map_err(internal_error)?;
 
-    let res = rows
-        .into_iter()
-        .map(|(user, cart)| SafeUserWithCart { user, cart })
-        .collect();
+    // let addresses = addresses::table
+    //     .select(Address::as_select())
+    //     .load(&mut conn)
+    //     .await
+    //     .map_err(internal_error)?;
 
-    Ok(Json(res))
+    // let mut addr_map: HashMap<Uuid, Vec<Address>> = HashMap::new();
+    //
+    // for addr in addresses {
+    //     addr_map.entry(addr.user_id).or_default().push(addr);
+    // }
+
+    // let res = rows
+    //     .into_iter()
+    //     .map(|(user, cart, profile, products_json)| {
+    //         let address = addr_map.remove(&user.id).unwrap_or_default();
+    //         let products = serde_json::from_value(products_json).unwrap_or_default();
+    //         let cart = CartWithProducts { cart, products };
+    //         SafeUserWithCart {
+    //             user,
+    //             cart,
+    //             address,
+    //             profile: profile,
+    //         }
+    //     })
+    //     .collect();
+
+    Ok(Json(rows))
 }
 
 pub async fn get_current_user(
     State(pool): State<Pool>,
     claims: AccessTokenClaims,
 ) -> Result<Json<SafeUserWithCart>, (StatusCode, String)> {
-    use crate::cart::models::SafeCart;
-    use axum_shop::schema::carts;
-    use axum_shop::schema::users;
+    use crate::cart::models::{Cart, CartWithProducts, SafeCart};
+    use crate::product::models::ProductWithQty;
+    use crate::user::models::{Address, Profile};
+    use axum_shop::schema::{addresses, cart_products, carts, products, profiles, users};
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
     let user_id = Uuid::parse_str(&claims.sub).unwrap();
 
-    let (user, cart) = users::table
+    let (user, cart, profile) = users::table
         .filter(users::id.eq(&user_id))
         .inner_join(carts::table)
-        .select((SafeUser::as_select(), SafeCart::as_select()))
-        .get_result::<(SafeUser, SafeCart)>(&mut conn)
+        .inner_join(profiles::table)
+        .select((
+            SafeUser::as_select(),
+            Cart::as_select(),
+            Profile::as_select(),
+        ))
+        .get_result::<(SafeUser, Cart, Profile)>(&mut conn)
         .await
         .map_err(internal_error)?;
 
-    let res = SafeUserWithCart { user, cart };
+    let products_json = cart_products::table
+        .inner_join(products::table.on(cart_products::product_id.eq(products::id)))
+        .filter(cart_products::cart_id.eq(cart.id))
+        .select(sql::<diesel::sql_types::Json>(
+            "json_build_object(
+                'id', products.id,
+                'title', products.title,
+                'price', products.price,
+                'description', products.description,
+                'image', products.image,
+                'quantity', cart_products.quantity
+            )",
+        ))
+        .load::<serde_json::Value>(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    let address = addresses::table
+        .filter(addresses::user_id.eq(&user_id))
+        .select(Address::as_select())
+        .order_by(addresses::is_default.desc())
+        .load(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    let products = products_json
+        .into_iter()
+        .filter_map(|v| serde_json::from_value(v).ok())
+        .collect();
+
+    let cart_with_products = CartWithProducts { cart, products };
+
+    let res = SafeUserWithCart {
+        user,
+        cart: cart_with_products,
+        address,
+        profile,
+    };
 
     Ok(Json(res))
 }
