@@ -316,7 +316,7 @@ pub async fn get_current_user(
     State(pool): State<Pool>,
     claims: AccessTokenClaims,
 ) -> Result<Json<SafeUserWithCart>, (StatusCode, String)> {
-    use crate::cart::models::{Cart, CartWithProducts, SafeCart};
+    use crate::cart::models::{Cart, CartWithProducts};
     use crate::product::models::ProductWithQty;
     use crate::user::models::{Address, Profile};
     use axum_shop::schema::{addresses, cart_products, carts, products, profiles, users};
@@ -340,7 +340,7 @@ pub async fn get_current_user(
 
     let products_json = cart_products::table
         .inner_join(products::table.on(cart_products::product_id.eq(products::id)))
-        .filter(cart_products::cart_id.eq(cart.id))
+        .filter(cart_products::cart_id.eq(&cart.id))
         .select(sql::<diesel::sql_types::Json>(
             "json_build_object(
                 'id', products.id,

@@ -138,6 +138,8 @@ pub async fn create_address_for_current_user(
         city: payload.city,
         postal_code: payload.postal_code,
         country: payload.country,
+        longitude: Some(123.123),
+        latitude: Some(123.123),
         is_default: if current_default <= 0 {
             Some(true)
         } else {
@@ -323,4 +325,8 @@ pub async fn get_current_user_default_address(
         .map_err(internal_error)?;
 
     Ok(Json(res))
+}
+
+async fn geocode_address(address: &str) -> Result<(f64, f64), (String, StatusCode)> {
+    Ok((123.123, 123.123))
 }

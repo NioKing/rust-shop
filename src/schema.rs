@@ -16,6 +16,8 @@ diesel::table! {
         is_default -> Nullable<Bool>,
         created_at -> Nullable<Timestamptz>,
         updated_at -> Nullable<Timestamptz>,
+        latitude -> Nullable<Float8>,
+        longitude -> Nullable<Float8>,
     }
 }
 
@@ -162,11 +164,4 @@ diesel::allow_tables_to_appear_in_same_query!(
     profiles,
     user_subscriptions,
     users,
-);
-
-diesel::allow_columns_to_appear_in_same_group_by_clause!(
-    users::id,
-    carts::id,
-    profiles::id,
-    profiles::phone_number
 );
