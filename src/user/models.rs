@@ -65,3 +65,10 @@ pub struct UpdateAddress {
     pub country: Option<String>,
     pub is_default: Option<bool>,
 }
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct GeocodeResponse {
+    pub lat: String,
+    pub lon: String,
+    pub display_name: String,
+}

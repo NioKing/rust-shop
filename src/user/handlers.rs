@@ -1,4 +1,4 @@
-use super::models::{Address, NewAddress, Profile, UpdateAddress, UpdateProfile};
+use super::models::{Address, GeocodeResponse, NewAddress, Profile, UpdateAddress, UpdateProfile};
 
 use crate::auth::models::AccessTokenClaims;
 use crate::utils::{internal_error, types::Pool};
@@ -128,7 +128,12 @@ pub async fn create_address_for_current_user(
         .await
         .map_err(internal_error)?;
 
-    println!("cur def: {}", current_default);
+    geocode_address(&payload.address_line).await.map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            "failed to geocode address".to_owned(),
+        )
+    })?;
 
     let address = Address {
         id: Uuid::new_v4(),
@@ -147,14 +152,15 @@ pub async fn create_address_for_current_user(
         },
     };
 
-    let res = diesel::insert_into(addresses::table)
-        .values(&address)
-        .returning(Address::as_returning())
-        .get_result(&mut conn)
-        .await
-        .map_err(internal_error)?;
+    // let res = diesel::insert_into(addresses::table)
+    //     .values(&address)
+    //     .returning(Address::as_returning())
+    //     .get_result(&mut conn)
+    //     .await
+    //     .map_err(internal_error)?;
 
-    Ok(Json(res))
+    Ok(Json(address))
+    // Ok(Json(res))
 }
 
 pub async fn get_user_addresses_by_id(
@@ -327,6 +333,25 @@ pub async fn get_current_user_default_address(
     Ok(Json(res))
 }
 
-async fn geocode_address(address: &str) -> Result<(f64, f64), (String, StatusCode)> {
-    Ok((123.123, 123.123))
+pub async fn geocode_address(address: &str) -> Result<GeocodeResponse, Box<dyn std::error::Error>> {
+    let address = format!("{}", address.replace(" ", "+"));
+
+    println!("current adress: {:?}", address);
+
+    let client = reqwest::Client::new();
+
+    let data = &client
+        .get(&format!(
+            "https://nominatim.openstreetmap.org/search?format=json&q={}",
+            address
+        ))
+        .header("User-Agent", "axum-shop/1.0")
+        .send()
+        .await?
+        .json::<Vec<GeocodeResponse>>()
+        .await?[0];
+
+    println!("data: {:?}", data);
+
+    Ok(data.clone())
 }
