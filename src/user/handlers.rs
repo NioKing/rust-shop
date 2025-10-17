@@ -128,29 +128,37 @@ pub async fn create_address_for_current_user(
         .await
         .map_err(internal_error)?;
 
-    geocode_address(&payload.address_line).await.map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "failed to geocode address".to_owned(),
-        )
-    })?;
+    let current_address: GeocodeResponse =
+        geocode_address(&payload.address_line).await.map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                "failed to geocode address".to_owned(),
+            )
+        })?;
+
+    let (lon, lat) = (
+        current_address.lon.parse::<f64>().map_err(internal_error)?,
+        current_address.lat.parse::<f64>().map_err(internal_error)?,
+    );
 
     let address = Address {
         id: Uuid::new_v4(),
         user_id,
         label: payload.label,
-        address_line: payload.address_line,
-        city: payload.city,
-        postal_code: payload.postal_code,
-        country: payload.country,
-        longitude: Some(123.123),
-        latitude: Some(123.123),
+        address_line: current_address.display_name,
+        city: Some(current_address.address.city),
+        postal_code: Some(current_address.address.postcode),
+        country: Some(current_address.address.country),
+        longitude: Some(lon),
+        latitude: Some(lat),
         is_default: if current_default <= 0 {
             Some(true)
         } else {
             Some(false)
         },
     };
+
+    println!("Address: {:?}", address);
 
     // let res = diesel::insert_into(addresses::table)
     //     .values(&address)
@@ -340,18 +348,24 @@ pub async fn geocode_address(address: &str) -> Result<GeocodeResponse, Box<dyn s
 
     let client = reqwest::Client::new();
 
-    let data = &client
+    let mut data = client
         .get(&format!(
-            "https://nominatim.openstreetmap.org/search?format=json&q={}",
+            "https://nominatim.openstreetmap.org/search?format=json&q={}&addressdetails=1",
             address
         ))
         .header("User-Agent", "axum-shop/1.0")
         .send()
         .await?
         .json::<Vec<GeocodeResponse>>()
-        .await?[0];
+        .await?;
 
     println!("data: {:?}", data);
 
-    Ok(data.clone())
+    let res = if let Some(val) = data.pop() {
+        val
+    } else {
+        return Err("Invalid address")?;
+    };
+
+    Ok(res)
 }

@@ -50,9 +50,6 @@ pub struct Address {
 pub struct NewAddress {
     pub label: Option<String>,
     pub address_line: String,
-    pub city: Option<String>,
-    pub postal_code: Option<String>,
-    pub country: Option<String>,
 }
 
 #[derive(Debug, Deserialize, AsChangeset)]
@@ -66,9 +63,19 @@ pub struct UpdateAddress {
     pub is_default: Option<bool>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub struct GeocodeResponse {
     pub lat: String,
     pub lon: String,
     pub display_name: String,
+    pub address: AddressExtras,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AddressExtras {
+    pub city: String,
+    pub city_district: String,
+    pub state: String,
+    pub postcode: String,
+    pub country: String,
 }
