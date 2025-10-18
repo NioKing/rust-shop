@@ -132,7 +132,7 @@ pub async fn create_address_for_current_user(
         geocode_address(&payload.address_line).await.map_err(|_| {
             (
                 StatusCode::BAD_REQUEST,
-                "failed to geocode address".to_owned(),
+                "Failed to geocode address".to_owned(),
             )
         })?;
 
@@ -263,7 +263,6 @@ pub async fn delete_current_user_address(
     State(pool): State<Pool>,
     Path(id): Path<Uuid>,
     claims: AccessTokenClaims,
-    Json(payload): Json<UpdateAddress>,
 ) -> Result<Json<Address>, (StatusCode, String)> {
     use axum_shop::schema::addresses;
 
@@ -341,7 +340,7 @@ pub async fn get_current_user_default_address(
     Ok(Json(res))
 }
 
-pub async fn geocode_address(address: &str) -> Result<GeocodeResponse, Box<dyn std::error::Error>> {
+pub async fn geocode_address(address: &str) -> Result<GeocodeResponse, (StatusCode, String)> {
     let address = format!("{}", address.replace(" ", "+"));
 
     println!("current adress: {:?}", address);
@@ -355,16 +354,21 @@ pub async fn geocode_address(address: &str) -> Result<GeocodeResponse, Box<dyn s
         ))
         .header("User-Agent", "axum-shop/1.0")
         .send()
-        .await?
+        .await
+        .map_err(internal_error)?
         .json::<Vec<GeocodeResponse>>()
-        .await?;
+        .await
+        .map_err(internal_error)?;
 
     println!("data: {:?}", data);
 
     let res = if let Some(val) = data.pop() {
         val
     } else {
-        return Err("Invalid address")?;
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid address".to_owned(),
+        ))?;
     };
 
     Ok(res)
