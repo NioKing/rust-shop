@@ -13,7 +13,7 @@ diesel::table! {
         postal_code -> Nullable<Varchar>,
         #[max_length = 30]
         country -> Nullable<Varchar>,
-        is_default -> Nullable<Bool>,
+        is_default -> Bool,
         created_at -> Nullable<Timestamptz>,
         updated_at -> Nullable<Timestamptz>,
         latitude -> Nullable<Float8>,

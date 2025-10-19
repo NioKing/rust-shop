@@ -1,0 +1,2 @@
+ALTER TABLE addresses ALTER COLUMN is_default DROP NOT NULL;
+ALTER TABLE addresses ALTER COLUMN is_default DROP DEFAULT;

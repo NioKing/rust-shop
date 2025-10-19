@@ -1,7 +1,7 @@
 use super::models::{Address, GeocodeResponse, NewAddress, Profile, UpdateAddress, UpdateProfile};
 
 use crate::auth::models::AccessTokenClaims;
-use crate::utils::{internal_error, types::Pool};
+use crate::utils::{internal_error, parse_user_id, types::Pool};
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -37,12 +37,7 @@ pub async fn get_current_user_profile(
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "Failed to parse user id".to_owned(),
-        )
-    })?;
+    let user_id = parse_user_id(&claims.sub)?;
 
     let res = profiles::table
         .filter(profiles::user_id.eq(&user_id))
@@ -83,12 +78,7 @@ pub async fn update_current_user_profile(
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "Failed to parse user id".to_owned(),
-        )
-    })?;
+    let user_id = parse_user_id(&claims.sub)?;
 
     let res = diesel::update(profiles::table.filter(profiles::user_id.eq(&user_id)))
         .set(&payload)
@@ -103,19 +93,13 @@ pub async fn update_current_user_profile(
 pub async fn create_address_for_current_user(
     State(pool): State<Pool>,
     claims: AccessTokenClaims,
-    // Path(id): Path<Uuid>,
     Json(payload): Json<NewAddress>,
 ) -> Result<Json<Address>, (StatusCode, String)> {
     use axum_shop::schema::addresses;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "Failed to parse user id".to_owned(),
-        )
-    })?;
+    let user_id = parse_user_id(&claims.sub)?;
 
     let current_default: i64 = addresses::table
         .filter(
@@ -128,13 +112,7 @@ pub async fn create_address_for_current_user(
         .await
         .map_err(internal_error)?;
 
-    let current_address: GeocodeResponse =
-        geocode_address(&payload.address_line).await.map_err(|_| {
-            (
-                StatusCode::BAD_REQUEST,
-                "Failed to geocode address".to_owned(),
-            )
-        })?;
+    let current_address = geocode_address(&payload.address_line).await?;
 
     let (lon, lat) = (
         current_address.lon.parse::<f64>().map_err(internal_error)?,
@@ -151,11 +129,7 @@ pub async fn create_address_for_current_user(
         country: Some(current_address.address.country),
         longitude: Some(lon),
         latitude: Some(lat),
-        is_default: if current_default <= 0 {
-            Some(true)
-        } else {
-            Some(false)
-        },
+        is_default: current_default <= 0,
     };
 
     println!("Address: {:?}", address);
@@ -218,12 +192,7 @@ pub async fn update_current_user_address(
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "Failed to parse user id".to_owned(),
-        )
-    })?;
+    let user_id = parse_user_id(&claims.sub)?;
 
     if let Some(is_default) = payload.is_default {
         if is_default == true {
@@ -268,12 +237,7 @@ pub async fn delete_current_user_address(
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "Failed to parse user id".to_owned(),
-        )
-    })?;
+    let user_id = parse_user_id(&claims.sub)?;
 
     let res = diesel::delete(
         addresses::table.filter(addresses::user_id.eq(&user_id).and(addresses::id.eq(&id))),
@@ -294,12 +258,7 @@ pub async fn get_current_user_addresses(
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "Failed to parse user id".to_owned(),
-        )
-    })?;
+    let user_id = parse_user_id(&claims.sub)?;
 
     let res = addresses::table
         .filter(addresses::user_id.eq(&user_id))
@@ -319,12 +278,7 @@ pub async fn get_current_user_default_address(
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let user_id = Uuid::parse_str(&claims.sub).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "Failed to parse user id".to_owned(),
-        )
-    })?;
+    let user_id = parse_user_id(&claims.sub)?;
 
     let res = addresses::table
         .filter(

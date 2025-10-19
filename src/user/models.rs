@@ -42,7 +42,7 @@ pub struct Address {
     pub country: Option<String>,
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
-    pub is_default: Option<bool>,
+    pub is_default: bool,
 }
 
 #[derive(Debug, Deserialize, AsChangeset)]

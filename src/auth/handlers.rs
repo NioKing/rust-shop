@@ -4,8 +4,8 @@ use super::models::{
     RefreshTokenClaims, SafeUser, SafeUserWithCart, Tokens, UpdateUser, UpdateUserPayload, User,
     UserEmail,
 };
-use crate::utils::internal_error;
 use crate::utils::types::Pool;
+use crate::utils::{internal_error, parse_user_id};
 use axum::RequestPartsExt;
 use axum::extract::FromRequestParts;
 use axum::http::HeaderMap;
@@ -323,7 +323,7 @@ pub async fn get_current_user(
 
     let mut conn = pool.get().await.map_err(internal_error)?;
 
-    let user_id = Uuid::parse_str(&claims.sub).unwrap();
+    let user_id = parse_user_id(&claims.sub)?;
 
     let (user, cart, profile) = users::table
         .filter(users::id.eq(&user_id))
@@ -436,7 +436,7 @@ pub async fn refresh_token(
 
     let token = bearer.token();
 
-    let id = Uuid::parse_str(&claims.sub).map_err(internal_error)?;
+    let id = parse_user_id(&claims.sub)?;
 
     let user = users::table
         .find(&id)
@@ -597,7 +597,8 @@ pub async fn logout(
     use axum_shop::schema::users;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
-    let id = Uuid::parse_str(&claims.sub).unwrap();
+
+    let id = parse_user_id(&claims.sub)?;
 
     diesel::update(users::table.filter(users::id.eq(id).and(users::hashed_rt.is_not_null())))
         .set(users::hashed_rt.eq(None::<String>))
