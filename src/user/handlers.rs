@@ -263,6 +263,7 @@ pub async fn get_current_user_addresses(
     let res = addresses::table
         .filter(addresses::user_id.eq(&user_id))
         .select(Address::as_select())
+        .order_by(addresses::is_default.desc())
         .load(&mut conn)
         .await
         .map_err(internal_error)?;
@@ -288,6 +289,49 @@ pub async fn get_current_user_default_address(
         )
         .select(Address::as_select())
         .get_result(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
+}
+
+pub async fn set_address_as_default(
+    State(pool): State<Pool>,
+    Path(id): Path<Uuid>,
+    claims: AccessTokenClaims,
+) -> Result<Json<Address>, (StatusCode, String)> {
+    use axum_shop::schema::addresses;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let user_id = parse_user_id(&claims.sub)?;
+
+    let res = conn
+        .transaction::<Address, diesel::result::Error, _>(move |mut conn| {
+            Box::pin(async move {
+                let addresses = diesel::update(
+                    addresses::table.filter(
+                        addresses::user_id
+                            .eq(&user_id)
+                            .and(addresses::is_default.eq(true)),
+                    ),
+                )
+                .set(addresses::is_default.eq(false))
+                .execute(&mut conn)
+                .await?;
+
+                let res = diesel::update(
+                    addresses::table
+                        .filter(addresses::id.eq(&id).and(addresses::user_id.eq(&user_id))),
+                )
+                .set(addresses::is_default.eq(true))
+                .returning(Address::as_returning())
+                .get_result(&mut conn)
+                .await?;
+
+                Ok(res)
+            })
+        })
         .await
         .map_err(internal_error)?;
 

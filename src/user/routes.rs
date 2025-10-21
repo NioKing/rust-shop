@@ -33,4 +33,8 @@ pub fn get_routes() -> Router<Pool> {
             "/me/addresses/default",
             get(handlers::get_current_user_default_address),
         )
+        .route(
+            "/me/addresses/{id}/make_default",
+            post(handlers::set_address_as_default),
+        )
 }
