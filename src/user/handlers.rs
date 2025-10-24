@@ -1,4 +1,7 @@
-use super::models::{Address, GeocodeResponse, NewAddress, Profile, UpdateAddress, UpdateProfile};
+use super::models::{
+    Address, AllowedAddressUpdate, GeocodeResponse, NewAddress, Profile, UpdateAddress,
+    UpdateProfile,
+};
 
 use crate::auth::models::AccessTokenClaims;
 use crate::utils::{internal_error, parse_user_id, types::Pool};
@@ -216,10 +219,45 @@ pub async fn update_current_user_address(
         }
     };
 
+    if let Some(address_line) = &payload.address_line {
+        let geo = geocode_address(address_line).await?;
+        let lat = geo.lat.parse::<f64>().map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to parse latitude".to_owned(),
+            )
+        })?;
+
+        let lon = geo.lon.parse::<f64>().map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to parse longitude".to_owned(),
+            )
+        })?;
+
+        diesel::update(addresses::table.find(&id))
+            .set((
+                addresses::address_line.eq(&geo.display_name),
+                addresses::city.eq(&geo.address.city),
+                addresses::country.eq(&geo.address.country),
+                addresses::postal_code.eq(&geo.address.postcode),
+                addresses::latitude.eq(&lat),
+                addresses::longitude.eq(&lon),
+            ))
+            .execute(&mut conn)
+            .await
+            .map_err(internal_error)?;
+    };
+
+    let allowed_update = AllowedAddressUpdate {
+        label: payload.label,
+        is_default: payload.is_default,
+    };
+
     let res = diesel::update(
         addresses::table.filter(addresses::user_id.eq(&user_id).and(addresses::id.eq(&id))),
     )
-    .set(&payload)
+    .set(&allowed_update)
     .returning(Address::as_returning())
     .get_result(&mut conn)
     .await
