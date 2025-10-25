@@ -1,5 +1,5 @@
 use super::models::{
-    Address, AllowedAddressUpdate, GeocodeResponse, NewAddress, Profile, UpdateAddress,
+    Address, GeocodeResponse, NewAddress, Profile, UpdateAddress, UpdateAddressPayload,
     UpdateProfile,
 };
 
@@ -189,7 +189,7 @@ pub async fn update_current_user_address(
     State(pool): State<Pool>,
     Path(id): Path<Uuid>,
     claims: AccessTokenClaims,
-    Json(payload): Json<UpdateAddress>,
+    Json(payload): Json<UpdateAddressPayload>,
 ) -> Result<Json<Address>, (StatusCode, String)> {
     use axum_shop::schema::addresses;
 
@@ -249,7 +249,7 @@ pub async fn update_current_user_address(
             .map_err(internal_error)?;
     };
 
-    let allowed_update = AllowedAddressUpdate {
+    let address_update = UpdateAddress {
         label: payload.label,
         is_default: payload.is_default,
     };
@@ -257,7 +257,7 @@ pub async fn update_current_user_address(
     let res = diesel::update(
         addresses::table.filter(addresses::user_id.eq(&user_id).and(addresses::id.eq(&id))),
     )
-    .set(&allowed_update)
+    .set(&address_update)
     .returning(Address::as_returning())
     .get_result(&mut conn)
     .await

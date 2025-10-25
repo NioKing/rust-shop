@@ -54,7 +54,7 @@ pub struct NewAddress {
 
 #[derive(Debug, Deserialize, AsChangeset)]
 #[diesel(table_name = addresses)]
-pub struct UpdateAddress {
+pub struct UpdateAddressPayload {
     pub label: Option<String>,
     pub address_line: Option<String>,
     pub is_default: Option<bool>,
@@ -62,7 +62,7 @@ pub struct UpdateAddress {
 
 #[derive(Debug, Deserialize, AsChangeset)]
 #[diesel(table_name = addresses)]
-pub struct AllowedAddressUpdate {
+pub struct UpdateAddress {
     pub label: Option<String>,
     pub is_default: Option<bool>,
 }
