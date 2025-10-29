@@ -392,7 +392,7 @@ pub async fn login_user(
         .filter(users::email.eq(payload.email))
         .first::<User>(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .map_err(|e| (StatusCode::NOT_FOUND, "User not found".to_owned()))?;
 
     if !validate_hash(payload.password, user.password_hash).await? {
         return Err((StatusCode::UNAUTHORIZED, "Invalid password".to_owned()));
