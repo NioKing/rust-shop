@@ -1,4 +1,4 @@
-use axum_shop::schema::{addresses, profiles};
+use axum_shop::schema::{addresses, profiles, user_subscriptions};
 use chrono::NaiveDate;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -82,4 +82,33 @@ pub struct AddressExtras {
     pub state: String,
     pub postcode: String,
     pub country: String,
+}
+
+#[derive(Debug, Serialize, Queryable, Selectable, Insertable)]
+#[diesel(table_name = user_subscriptions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct UserSubscriptions {
+    pub channel: String,
+    pub orders_notifications: Option<bool>,
+    pub discount_notifications: Option<bool>,
+    pub newsletter_notifications: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Queryable, Selectable, Insertable)]
+#[diesel(table_name = user_subscriptions)]
+pub struct NewUserSubscriptions {
+    pub user_id: uuid::Uuid,
+    pub channel: String,
+    pub orders_notifications: bool,
+    pub discount_notifications: bool,
+    pub newsletter_notifications: bool,
+}
+
+#[derive(Debug, Deserialize, AsChangeset)]
+#[diesel(table_name = user_subscriptions)]
+pub struct UpdateUserSubscriptions {
+    pub channel: Option<String>,
+    pub orders_notifications: Option<bool>,
+    pub discount_notifications: Option<bool>,
+    pub newsletter_notifications: Option<bool>,
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-endpoint="127.0.0.1:3000/api"
+endpoint="http://127.0.0.1:3000/api"
 email=""
 password=""
 

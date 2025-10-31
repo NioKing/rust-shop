@@ -38,7 +38,7 @@ pub async fn create_user(
     ValidatedJson(payload): ValidatedJson<NewUser>,
 ) -> Result<Json<SafeUser>, (StatusCode, String)> {
     use crate::cart::models::NewCart;
-    use crate::notification::models::UserSubscriptions;
+    use crate::user::models::NewUserSubscriptions;
     use crate::user::models::Profile;
 
     use axum_shop::schema::{carts, profiles, user_subscriptions, users};
@@ -73,7 +73,7 @@ pub async fn create_user(
                     updated_at,
                 };
 
-                let subs_data = UserSubscriptions {
+                let subs_data = NewUserSubscriptions {
                     user_id,
                     channel: "email".to_owned(),
                     orders_notifications: true,

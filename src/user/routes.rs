@@ -37,4 +37,12 @@ pub fn get_routes() -> Router<Pool> {
             "/me/addresses/{id}/make_default",
             post(handlers::set_address_as_default),
         )
+        .route(
+            "/me/subscriptions",
+            get(handlers::get_all_current_user_subscriptions),
+        )
+        .route(
+            "/me/subscriptions/{channel}",
+            post(handlers::update_current_user_subscription),
+        )
 }

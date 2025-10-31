@@ -1,6 +1,6 @@
 use super::models::{
     Address, GeocodeResponse, NewAddress, Profile, UpdateAddress, UpdateAddressPayload,
-    UpdateProfile,
+    UpdateProfile, UpdateUserSubscriptions, UserSubscriptions,
 };
 
 use crate::auth::models::AccessTokenClaims;
@@ -408,4 +408,52 @@ pub async fn geocode_address(address: &str) -> Result<GeocodeResponse, (StatusCo
     };
 
     Ok(res)
+}
+
+pub async fn get_all_current_user_subscriptions(
+    State(pool): State<Pool>,
+    claims: AccessTokenClaims,
+) -> Result<Json<Vec<UserSubscriptions>>, (StatusCode, String)> {
+    use axum_shop::schema::user_subscriptions;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let user_id = parse_user_id(&claims.sub)?;
+
+    let res = user_subscriptions::table
+        .filter(user_subscriptions::user_id.eq(&user_id))
+        .select(UserSubscriptions::as_select())
+        .load(&mut conn)
+        .await
+        .map_err(internal_error)?;
+
+    Ok(Json(res))
+}
+
+pub async fn update_current_user_subscription(
+    State(pool): State<Pool>,
+    Path(channel): Path<String>,
+    claims: AccessTokenClaims,
+    Json(payload): Json<UpdateUserSubscriptions>,
+) -> Result<Json<UserSubscriptions>, (StatusCode, String)> {
+    use axum_shop::schema::user_subscriptions;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let user_id = parse_user_id(&claims.sub)?;
+
+    let res = diesel::update(
+        user_subscriptions::table.filter(
+            user_subscriptions::channel
+                .eq(&channel)
+                .and(user_subscriptions::user_id.eq(&user_id)),
+        ),
+    )
+    .set(&payload)
+    .returning(UserSubscriptions::as_returning())
+    .get_result(&mut conn)
+    .await
+    .map_err(internal_error)?;
+
+    Ok(Json(res))
 }
