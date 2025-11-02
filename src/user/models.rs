@@ -87,21 +87,27 @@ pub struct AddressExtras {
 #[derive(Debug, Serialize, Queryable, Selectable, Insertable)]
 #[diesel(table_name = user_subscriptions)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct UserSubscriptions {
+pub struct UserSubscription {
     pub channel: String,
     pub orders_notifications: Option<bool>,
     pub discount_notifications: Option<bool>,
     pub newsletter_notifications: Option<bool>,
 }
 
-#[derive(Debug, Serialize, Queryable, Selectable, Insertable)]
+#[derive(Debug, Serialize, Queryable, Selectable, Insertable, Deserialize)]
 #[diesel(table_name = user_subscriptions)]
 pub struct NewUserSubscriptions {
-    pub user_id: uuid::Uuid,
+    pub user_id: Uuid,
     pub channel: String,
     pub orders_notifications: bool,
     pub discount_notifications: bool,
     pub newsletter_notifications: bool,
+}
+
+#[derive(Debug, Deserialize, AsChangeset)]
+#[diesel(table_name = user_subscriptions)]
+pub struct NewSubscriptionPayload {
+    pub channel: String,
 }
 
 #[derive(Debug, Deserialize, AsChangeset)]

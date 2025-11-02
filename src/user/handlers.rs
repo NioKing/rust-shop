@@ -1,6 +1,6 @@
 use super::models::{
-    Address, GeocodeResponse, NewAddress, Profile, UpdateAddress, UpdateAddressPayload,
-    UpdateProfile, UpdateUserSubscriptions, UserSubscriptions,
+    Address, GeocodeResponse, NewAddress, NewSubscriptionPayload, NewUserSubscriptions, Profile,
+    UpdateAddress, UpdateAddressPayload, UpdateProfile, UpdateUserSubscriptions, UserSubscription,
 };
 
 use crate::auth::models::AccessTokenClaims;
@@ -413,7 +413,7 @@ pub async fn geocode_address(address: &str) -> Result<GeocodeResponse, (StatusCo
 pub async fn get_all_current_user_subscriptions(
     State(pool): State<Pool>,
     claims: AccessTokenClaims,
-) -> Result<Json<Vec<UserSubscriptions>>, (StatusCode, String)> {
+) -> Result<Json<Vec<UserSubscription>>, (StatusCode, String)> {
     use axum_shop::schema::user_subscriptions;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
@@ -422,7 +422,7 @@ pub async fn get_all_current_user_subscriptions(
 
     let res = user_subscriptions::table
         .filter(user_subscriptions::user_id.eq(&user_id))
-        .select(UserSubscriptions::as_select())
+        .select(UserSubscription::as_select())
         .load(&mut conn)
         .await
         .map_err(internal_error)?;
@@ -435,7 +435,7 @@ pub async fn update_current_user_subscription(
     Path(channel): Path<String>,
     claims: AccessTokenClaims,
     Json(payload): Json<UpdateUserSubscriptions>,
-) -> Result<Json<UserSubscriptions>, (StatusCode, String)> {
+) -> Result<Json<UserSubscription>, (StatusCode, String)> {
     use axum_shop::schema::user_subscriptions;
 
     let mut conn = pool.get().await.map_err(internal_error)?;
@@ -450,10 +450,39 @@ pub async fn update_current_user_subscription(
         ),
     )
     .set(&payload)
-    .returning(UserSubscriptions::as_returning())
+    .returning(UserSubscription::as_returning())
     .get_result(&mut conn)
     .await
     .map_err(internal_error)?;
+
+    Ok(Json(res))
+}
+
+pub async fn create_current_user_subscription(
+    State(pool): State<Pool>,
+    claims: AccessTokenClaims,
+    Json(payload): Json<NewSubscriptionPayload>,
+) -> Result<Json<UserSubscription>, (StatusCode, String)> {
+    use axum_shop::schema::user_subscriptions;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let user_id = parse_user_id(&claims.sub)?;
+
+    let new_subscription = NewUserSubscriptions {
+        user_id,
+        channel: payload.channel,
+        orders_notifications: true,
+        discount_notifications: true,
+        newsletter_notifications: true,
+    };
+
+    let res = diesel::insert_into(user_subscriptions::table)
+        .values(&new_subscription)
+        .returning(UserSubscription::as_returning())
+        .get_result(&mut conn)
+        .await
+        .map_err(internal_error)?;
 
     Ok(Json(res))
 }

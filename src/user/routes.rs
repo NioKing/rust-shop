@@ -39,7 +39,8 @@ pub fn get_routes() -> Router<Pool> {
         )
         .route(
             "/me/subscriptions",
-            get(handlers::get_all_current_user_subscriptions),
+            get(handlers::get_all_current_user_subscriptions)
+                .post(handlers::create_current_user_subscription),
         )
         .route(
             "/me/subscriptions/{channel}",
