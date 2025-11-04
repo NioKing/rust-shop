@@ -486,3 +486,30 @@ pub async fn create_current_user_subscription(
 
     Ok(Json(res))
 }
+
+pub async fn delete_current_user_subscription(
+    State(pool): State<Pool>,
+    claims: AccessTokenClaims,
+    Path(channel): Path<String>,
+    Json(payload): Json<NewSubscriptionPayload>,
+) -> Result<Json<UserSubscription>, (StatusCode, String)> {
+    use axum_shop::schema::user_subscriptions;
+
+    let mut conn = pool.get().await.map_err(internal_error)?;
+
+    let user_id = parse_user_id(&claims.sub)?;
+
+    let res = diesel::delete(
+        user_subscriptions::table.filter(
+            user_subscriptions::channel
+                .eq(&channel)
+                .and(user_subscriptions::user_id.eq(&user_id)),
+        ),
+    )
+    .returning(UserSubscription::as_returning())
+    .get_result(&mut conn)
+    .await
+    .map_err(internal_error)?;
+
+    Ok(Json(res))
+}

@@ -44,6 +44,7 @@ pub fn get_routes() -> Router<Pool> {
         )
         .route(
             "/me/subscriptions/{channel}",
-            post(handlers::update_current_user_subscription),
+            post(handlers::update_current_user_subscription)
+                .delete(handlers::delete_current_user_subscription),
         )
 }
