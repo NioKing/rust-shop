@@ -18,7 +18,7 @@ use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 const NOTIFICATION_TEMPLATES_PATH: &str = "src/templates/**/*";
 
 pub async fn send_email(notification: Notification, pool: Pool) -> Result<(), String> {
-    use axum_shop::schema::users;
+    use axum_shop::schema::{user_subscriptions, users};
 
     let mut conn = pool
         .get()
@@ -28,6 +28,12 @@ pub async fn send_email(notification: Notification, pool: Pool) -> Result<(), St
     match notification {
         Notification::Discount(data) => {
             let users: Vec<String> = users::table
+                .inner_join(user_subscriptions::table.on(user_subscriptions::user_id.eq(users::id)))
+                .filter(
+                    user_subscriptions::channel
+                        .eq("email")
+                        .and(user_subscriptions::discount_notifications.eq(true)),
+                )
                 .select(users::email)
                 .load(&mut conn)
                 .await
