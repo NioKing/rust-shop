@@ -17,10 +17,16 @@ use axum::{
 use listenfd::ListenFd;
 use std::env;
 use tokio::net::TcpListener;
+use tokio_cron_scheduler::JobScheduler;
 use tower_http::{services::ServeDir, timeout::TimeoutLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{pool::get_pool, rmq::client};
+
+async fn some_async_fn() -> Result<(), String> {
+    println!("Hello from handler function");
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -30,6 +36,16 @@ async fn main() -> Result<(), String> {
         .map_err(|e| format!("Failed to create a directory: {}", e))?;
 
     let pool = get_pool().await?;
+
+    let mut scheduler = JobScheduler::new()
+        .await
+        .map_err(|_| "Failed to build scheduler".to_owned())?;
+
+    utils::scheduler::spawn_job(&scheduler, "1/7 * * * * *", some_async_fn).await?;
+
+    tokio::spawn(async move {
+        // scheduler.start().await.unwrap();
+    });
 
     tracing_subscriber::registry()
         .with(

@@ -1,6 +1,7 @@
 pub mod error;
 mod helpers;
 mod print_request;
+pub mod scheduler;
 pub mod types;
 
 pub use error::handler_404;
