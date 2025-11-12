@@ -3,6 +3,7 @@ mod auth;
 mod cart;
 mod category;
 mod discount;
+mod health;
 mod notification;
 mod pool;
 mod product;
@@ -64,6 +65,7 @@ async fn main() -> Result<(), String> {
         .merge(cart::routes::get_routes())
         .merge(discount::routes::get_routes())
         .merge(user::routes::get_routes())
+        .merge(health::routes::get_routes())
         .layer(middleware::from_fn(utils::print_req_res))
         .layer((
             TraceLayer::new_for_http(),
