@@ -6,18 +6,21 @@ pub struct ApplicationHealthResponse {
     pub rabbitmq: RmqHealth,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Default)]
 pub struct DbHealth {
     pub status: Status,
+    pub response_time_ms: u128,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Default)]
 pub struct RmqHealth {
     pub status: Status,
+    pub response_time_ms: u128,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Default)]
 pub enum Status {
     Up,
+    #[default]
     Down,
 }
