@@ -4,8 +4,10 @@ use super::models::{
     RefreshTokenClaims, SafeUser, SafeUserWithCart, Tokens, UpdateUser, UpdateUserPayload, User,
     UserEmail,
 };
+use crate::error::{AppError, AppErrorKind};
 use crate::utils::types::Pool;
 use crate::utils::{internal_error, parse_user_id};
+use anyhow::Context;
 use axum::RequestPartsExt;
 use axum::extract::FromRequestParts;
 use axum::http::HeaderMap;
@@ -130,17 +132,17 @@ pub async fn create_user(
 pub async fn get_user_by_id(
     State(pool): State<Pool>,
     Path(id): Path<Uuid>,
-) -> Result<Json<SafeUser>, (StatusCode, String)> {
+) -> Result<Json<SafeUser>, AppError> {
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let res = users::table
         .filter(users::id.eq(&id))
         .select(SafeUser::as_select())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to execute query")?;
 
     Ok(Json(res))
 }
@@ -148,17 +150,17 @@ pub async fn get_user_by_id(
 pub async fn get_user_by_email(
     State(pool): State<Pool>,
     Json(payload): Json<UserEmail>,
-) -> Result<Json<SafeUser>, (StatusCode, String)> {
+) -> Result<Json<SafeUser>, AppError> {
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let res = users::table
         .filter(users::email.eq(&payload.email))
         .select(SafeUser::as_select())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to execute query")?;
 
     Ok(Json(res))
 }
