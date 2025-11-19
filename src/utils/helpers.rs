@@ -1,13 +1,10 @@
+use crate::error::{AppError, AppErrorKind};
+use anyhow::Context;
 use reqwest::StatusCode;
 use uuid::Uuid;
 
-pub fn parse_user_id(id: &str) -> Result<Uuid, (StatusCode, String)> {
-    let user_id = Uuid::parse_str(id).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "Failed to parse user id".to_owned(),
-        )
-    })?;
+pub fn parse_user_id(id: &str) -> Result<Uuid, AppError> {
+    let user_id = Uuid::parse_str(id).context("Failed to parse uuid")?;
 
     Ok(user_id)
 }

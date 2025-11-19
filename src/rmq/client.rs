@@ -5,9 +5,11 @@ use std::env;
 use tokio_executor_trait::Tokio as TokioExec;
 use tokio_reactor_trait::Tokio as TokioReactor;
 
+use crate::error::{AppError, AppErrorKind};
 use crate::utils::{internal_error, types::Pool};
+use anyhow::Context;
 
-async fn connect(url: &str) -> Result<Connection, (StatusCode, String)> {
+async fn connect(url: &str) -> Result<Connection, AppError> {
     let conn = Connection::connect(
         url,
         ConnectionProperties::default()
@@ -15,24 +17,24 @@ async fn connect(url: &str) -> Result<Connection, (StatusCode, String)> {
             .with_reactor(TokioReactor::current()),
     )
     .await
-    .map_err(internal_error)?;
+    .context("Failed establish rmq connection")?;
 
     Ok(conn)
 }
 
-pub async fn publish_event(queue: &str, payload: &str) -> Result<(), (StatusCode, String)> {
-    let url = env::var("RMQ_URL").map_err(internal_error)?;
+pub async fn publish_event(queue: &str, payload: &str) -> Result<(), AppError> {
+    let url = env::var("RMQ_URL").context("Rmq url must be set")?;
 
     let channel = connect(&url)
         .await?
         .create_channel()
         .await
-        .map_err(internal_error)?;
+        .context("Failed to create rmq channel")?;
 
     channel
         .queue_declare(queue, QueueDeclareOptions::default(), FieldTable::default())
         .await
-        .map_err(internal_error)?;
+        .context("Failed to declare queue")?;
 
     channel
         .basic_publish(
@@ -43,9 +45,9 @@ pub async fn publish_event(queue: &str, payload: &str) -> Result<(), (StatusCode
             BasicProperties::default(),
         )
         .await
-        .map_err(internal_error)?
+        .context("Failed to create channel")?
         .await
-        .map_err(internal_error)?;
+        .context("Failed to publish queue")?;
 
     Ok(())
 }
@@ -59,19 +61,19 @@ pub async fn consume<
     consumer_tag: &str,
     pool: crate::utils::types::Pool,
     handler: impl Fn(T, Pool) -> Fut + Send + Sync + 'static,
-) -> Result<(), (StatusCode, String)> {
-    let url = env::var("RMQ_URL").map_err(internal_error)?;
+) -> Result<(), AppError> {
+    let url = env::var("RMQ_URL").context("Rmq url must be set")?;
 
     let channel = connect(&url)
         .await?
         .create_channel()
         .await
-        .map_err(internal_error)?;
+        .context("Failed to create channel")?;
 
     channel
         .queue_declare(queue, QueueDeclareOptions::default(), FieldTable::default())
         .await
-        .map_err(internal_error)?;
+        .context("Failed to declare queue")?;
 
     let mut consumer = channel
         .basic_consume(
@@ -81,10 +83,10 @@ pub async fn consume<
             FieldTable::default(),
         )
         .await
-        .map_err(internal_error)?;
+        .context("Failed to create consumer")?;
 
     while let Some(delivery) = consumer.next().await {
-        let delivery = delivery.map_err(internal_error)?;
+        let delivery = delivery.context("Failed to get data")?;
         let data = String::from_utf8_lossy(&delivery.data);
 
         println!("Data received: {}", data);
@@ -104,7 +106,7 @@ pub async fn consume<
         delivery
             .ack(BasicAckOptions::default())
             .await
-            .map_err(internal_error)?;
+            .context("Delivery acknowledge failed")?;
     }
 
     Ok(())

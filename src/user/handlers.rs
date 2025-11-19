@@ -4,7 +4,9 @@ use super::models::{
 };
 
 use crate::auth::models::AccessTokenClaims;
+use crate::error::{AppError, AppErrorKind};
 use crate::utils::{internal_error, parse_user_id, types::Pool};
+use anyhow::Context;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -17,17 +19,17 @@ use uuid::Uuid;
 pub async fn get_user_profile_by_id(
     State(pool): State<Pool>,
     Path(id): Path<Uuid>,
-) -> Result<Json<Profile>, (StatusCode, String)> {
+) -> Result<Json<Profile>, AppError> {
     use axum_shop::schema::profiles;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let res = profiles::table
         .filter(profiles::user_id.eq(&id))
         .select(Profile::as_select())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to get user")?;
 
     Ok(Json(res))
 }
@@ -35,10 +37,10 @@ pub async fn get_user_profile_by_id(
 pub async fn get_current_user_profile(
     State(pool): State<Pool>,
     claims: AccessTokenClaims,
-) -> Result<Json<Profile>, (StatusCode, String)> {
+) -> Result<Json<Profile>, AppError> {
     use axum_shop::schema::profiles;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -47,7 +49,7 @@ pub async fn get_current_user_profile(
         .select(Profile::as_select())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to get profile")?;
 
     Ok(Json(res))
 }
@@ -56,17 +58,17 @@ pub async fn update_profile(
     State(pool): State<Pool>,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateProfile>,
-) -> Result<Json<Profile>, (StatusCode, String)> {
+) -> Result<Json<Profile>, AppError> {
     use axum_shop::schema::profiles;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let res = diesel::update(profiles::table.find(&id))
         .set(&payload)
         .returning(Profile::as_returning())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to update profile")?;
 
     Ok(Json(res))
 }
@@ -76,10 +78,10 @@ pub async fn update_current_user_profile(
     Path(id): Path<Uuid>,
     claims: AccessTokenClaims,
     Json(payload): Json<UpdateProfile>,
-) -> Result<Json<Profile>, (StatusCode, String)> {
+) -> Result<Json<Profile>, AppError> {
     use axum_shop::schema::profiles;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -88,7 +90,7 @@ pub async fn update_current_user_profile(
         .returning(Profile::as_returning())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to update profile")?;
 
     Ok(Json(res))
 }
@@ -97,10 +99,10 @@ pub async fn create_address_for_current_user(
     State(pool): State<Pool>,
     claims: AccessTokenClaims,
     Json(payload): Json<NewAddress>,
-) -> Result<Json<Address>, (StatusCode, String)> {
+) -> Result<Json<Address>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -113,13 +115,19 @@ pub async fn create_address_for_current_user(
         .select(diesel::dsl::count_star())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to get user default address")?;
 
     let current_address = geocode_address(&payload.address_line).await?;
 
     let (lon, lat) = (
-        current_address.lon.parse::<f64>().map_err(internal_error)?,
-        current_address.lat.parse::<f64>().map_err(internal_error)?,
+        current_address
+            .lon
+            .parse::<f64>()
+            .context("Failed to get longitude")?,
+        current_address
+            .lat
+            .parse::<f64>()
+            .context("Failed to get latitude")?,
     );
 
     let address = Address {
@@ -142,7 +150,7 @@ pub async fn create_address_for_current_user(
     //     .returning(Address::as_returning())
     //     .get_result(&mut conn)
     //     .await
-    //     .map_err(internal_error)?;
+    // .context("Failed to create address")?;
 
     Ok(Json(address))
     // Ok(Json(res))
@@ -151,17 +159,17 @@ pub async fn create_address_for_current_user(
 pub async fn get_user_addresses_by_id(
     State(pool): State<Pool>,
     Path(id): Path<Uuid>,
-) -> Result<Json<Vec<Address>>, (StatusCode, String)> {
+) -> Result<Json<Vec<Address>>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let res = addresses::table
         .filter(addresses::user_id.eq(&id))
         .select(Address::as_select())
         .load(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to get address")?;
 
     Ok(Json(res))
 }
@@ -170,17 +178,17 @@ pub async fn update_address(
     State(pool): State<Pool>,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateAddress>,
-) -> Result<Json<Address>, (StatusCode, String)> {
+) -> Result<Json<Address>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let res = diesel::update(addresses::table.find(&id))
         .set(&payload)
         .returning(Address::as_returning())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to update address")?;
 
     Ok(Json(res))
 }
@@ -190,10 +198,10 @@ pub async fn update_current_user_address(
     Path(id): Path<Uuid>,
     claims: AccessTokenClaims,
     Json(payload): Json<UpdateAddressPayload>,
-) -> Result<Json<Address>, (StatusCode, String)> {
+) -> Result<Json<Address>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -208,32 +216,22 @@ pub async fn update_current_user_address(
                 .select(diesel::dsl::count_star())
                 .get_result(&mut conn)
                 .await
-                .map_err(internal_error)?;
+                .context("Failed to get current address")?;
 
             if cur_default > 0 {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    "Only one address can be set as default".to_owned(),
-                ));
+                return Err(AppError::validation("Only one address can be default"));
             }
         }
     };
 
     if let Some(address_line) = &payload.address_line {
         let geo = geocode_address(address_line).await?;
-        let lat = geo.lat.parse::<f64>().map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to parse latitude".to_owned(),
-            )
-        })?;
+        let lat = geo.lat.parse::<f64>().context("Failed to parse latitude")?;
 
-        let lon = geo.lon.parse::<f64>().map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to parse longitude".to_owned(),
-            )
-        })?;
+        let lon = geo
+            .lon
+            .parse::<f64>()
+            .context("Failed to parse longitude")?;
 
         diesel::update(addresses::table.find(&id))
             .set((
@@ -246,7 +244,7 @@ pub async fn update_current_user_address(
             ))
             .execute(&mut conn)
             .await
-            .map_err(internal_error)?;
+            .context("Failed to update address")?;
     };
 
     let address_update = UpdateAddress {
@@ -261,7 +259,7 @@ pub async fn update_current_user_address(
     .returning(Address::as_returning())
     .get_result(&mut conn)
     .await
-    .map_err(internal_error)?;
+    .context("Failed to update address")?;
 
     Ok(Json(res))
 }
@@ -270,10 +268,10 @@ pub async fn delete_current_user_address(
     State(pool): State<Pool>,
     Path(id): Path<Uuid>,
     claims: AccessTokenClaims,
-) -> Result<Json<Address>, (StatusCode, String)> {
+) -> Result<Json<Address>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -283,7 +281,7 @@ pub async fn delete_current_user_address(
     .returning(Address::as_returning())
     .get_result(&mut conn)
     .await
-    .map_err(internal_error)?;
+    .context("Failed to delete address")?;
 
     Ok(Json(res))
 }
@@ -291,10 +289,10 @@ pub async fn delete_current_user_address(
 pub async fn get_current_user_addresses(
     State(pool): State<Pool>,
     claims: AccessTokenClaims,
-) -> Result<Json<Vec<Address>>, (StatusCode, String)> {
+) -> Result<Json<Vec<Address>>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -304,7 +302,7 @@ pub async fn get_current_user_addresses(
         .order_by(addresses::is_default.desc())
         .load(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to get addresses")?;
 
     Ok(Json(res))
 }
@@ -312,10 +310,10 @@ pub async fn get_current_user_addresses(
 pub async fn get_current_user_default_address(
     State(pool): State<Pool>,
     claims: AccessTokenClaims,
-) -> Result<Json<Address>, (StatusCode, String)> {
+) -> Result<Json<Address>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -328,7 +326,7 @@ pub async fn get_current_user_default_address(
         .select(Address::as_select())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to get default address")?;
 
     Ok(Json(res))
 }
@@ -337,10 +335,10 @@ pub async fn set_address_as_default(
     State(pool): State<Pool>,
     Path(id): Path<Uuid>,
     claims: AccessTokenClaims,
-) -> Result<Json<Address>, (StatusCode, String)> {
+) -> Result<Json<Address>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -371,12 +369,12 @@ pub async fn set_address_as_default(
             })
         })
         .await
-        .map_err(internal_error)?;
+        .context("Failed to set address as default")?;
 
     Ok(Json(res))
 }
 
-pub async fn geocode_address(address: &str) -> Result<GeocodeResponse, (StatusCode, String)> {
+pub async fn geocode_address(address: &str) -> Result<GeocodeResponse, AppError> {
     let address = format!("{}", address.replace(" ", "+"));
 
     println!("current adress: {:?}", address);
@@ -391,20 +389,17 @@ pub async fn geocode_address(address: &str) -> Result<GeocodeResponse, (StatusCo
         .header("User-Agent", "axum-shop/1.0")
         .send()
         .await
-        .map_err(internal_error)?
+        .context("Geocode request failed")?
         .json::<Vec<GeocodeResponse>>()
         .await
-        .map_err(internal_error)?;
+        .context("Failed to get json geodata")?;
 
     println!("data: {:?}", data);
 
     let res = if let Some(val) = data.pop() {
         val
     } else {
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid address".to_owned(),
-        ))?;
+        return Err(AppError::validation("Invalid address"));
     };
 
     Ok(res)
@@ -413,10 +408,10 @@ pub async fn geocode_address(address: &str) -> Result<GeocodeResponse, (StatusCo
 pub async fn get_all_current_user_subscriptions(
     State(pool): State<Pool>,
     claims: AccessTokenClaims,
-) -> Result<Json<Vec<UserSubscription>>, (StatusCode, String)> {
+) -> Result<Json<Vec<UserSubscription>>, AppError> {
     use axum_shop::schema::user_subscriptions;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -425,7 +420,7 @@ pub async fn get_all_current_user_subscriptions(
         .select(UserSubscription::as_select())
         .load(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to get current user subscriptions")?;
 
     Ok(Json(res))
 }
@@ -435,10 +430,10 @@ pub async fn update_current_user_subscription(
     Path(channel): Path<String>,
     claims: AccessTokenClaims,
     Json(payload): Json<UpdateUserSubscriptions>,
-) -> Result<Json<UserSubscription>, (StatusCode, String)> {
+) -> Result<Json<UserSubscription>, AppError> {
     use axum_shop::schema::user_subscriptions;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -453,7 +448,7 @@ pub async fn update_current_user_subscription(
     .returning(UserSubscription::as_returning())
     .get_result(&mut conn)
     .await
-    .map_err(internal_error)?;
+    .context("Failed to update current user subscriptions")?;
 
     Ok(Json(res))
 }
@@ -462,10 +457,10 @@ pub async fn create_current_user_subscription(
     State(pool): State<Pool>,
     claims: AccessTokenClaims,
     Json(payload): Json<NewSubscriptionPayload>,
-) -> Result<Json<UserSubscription>, (StatusCode, String)> {
+) -> Result<Json<UserSubscription>, AppError> {
     use axum_shop::schema::user_subscriptions;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -482,7 +477,7 @@ pub async fn create_current_user_subscription(
         .returning(UserSubscription::as_returning())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to create user subscription")?;
 
     Ok(Json(res))
 }
@@ -492,10 +487,10 @@ pub async fn delete_current_user_subscription(
     claims: AccessTokenClaims,
     Path(channel): Path<String>,
     Json(payload): Json<NewSubscriptionPayload>,
-) -> Result<Json<UserSubscription>, (StatusCode, String)> {
+) -> Result<Json<UserSubscription>, AppError> {
     use axum_shop::schema::user_subscriptions;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -509,7 +504,7 @@ pub async fn delete_current_user_subscription(
     .returning(UserSubscription::as_returning())
     .get_result(&mut conn)
     .await
-    .map_err(internal_error)?;
+    .context("Failed to delete subscription")?;
 
     Ok(Json(res))
 }
@@ -518,10 +513,10 @@ pub async fn get_current_user_subscription(
     State(pool): State<Pool>,
     claims: AccessTokenClaims,
     Path(channel): Path<String>,
-) -> Result<Json<UserSubscription>, (StatusCode, String)> {
+) -> Result<Json<UserSubscription>, AppError> {
     use axum_shop::schema::user_subscriptions;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connecton")?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -534,7 +529,7 @@ pub async fn get_current_user_subscription(
         .select(UserSubscription::as_select())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to get subscription")?;
 
     Ok(Json(res))
 }

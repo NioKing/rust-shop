@@ -1,7 +1,12 @@
 use super::models::{Cart, CartWithProducts, ProductCarts, ProductsToCart};
 use crate::auth::models::User;
+use crate::error::{AppError, AppErrorKind};
 use crate::utils::types::Pool;
-use crate::{auth::models::AccessTokenClaims, utils::internal_error};
+use crate::{
+    auth::models::AccessTokenClaims,
+    utils::{internal_error, parse_user_id},
+};
+use anyhow::Context;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -15,10 +20,10 @@ use uuid::Uuid;
 
 pub async fn get_all_cart(
     State(pool): State<Pool>,
-) -> Result<Json<Vec<CartWithProducts>>, (StatusCode, String)> {
+) -> Result<Json<Vec<CartWithProducts>>, AppError> {
     use axum_shop::schema::{cart_products, carts, products};
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let rows = carts::table
         .left_join(cart_products::table.on(carts::id.eq(cart_products::cart_id)))
@@ -44,7 +49,7 @@ pub async fn get_all_cart(
         .group_by(carts::id)
         .load::<(Cart, serde_json::Value)>(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Cart query failed")?;
 
     let res = rows
         .into_iter()
@@ -61,12 +66,12 @@ pub async fn add_products_to_cart(
     State(pool): State<Pool>,
     claims: AccessTokenClaims,
     Json(payload): Json<ProductsToCart>,
-) -> Result<Json<CartWithProducts>, (StatusCode, String)> {
+) -> Result<Json<CartWithProducts>, AppError> {
     use axum_shop::schema::{cart_products, carts, products, users};
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
-    let user_id = Uuid::parse_str(&claims.sub).unwrap();
+    let user_id = parse_user_id(&claims.sub)?;
 
     let res = conn
         .transaction::<CartWithProducts, diesel::result::Error, _>(move |mut conn| {
@@ -136,7 +141,7 @@ pub async fn add_products_to_cart(
             })
         })
         .await
-        .map_err(internal_error)?;
+        .context("Failed to products to cart")?;
 
     Ok(Json(res))
 }
@@ -145,19 +150,16 @@ pub async fn remove_product_from_cart(
     State(pool): State<Pool>,
     claims: AccessTokenClaims,
     Json(payload): Json<ProductsToCart>,
-) -> Result<Json<CartWithProducts>, (StatusCode, String)> {
+) -> Result<Json<CartWithProducts>, AppError> {
     use axum_shop::schema::{cart_products, carts, products, users};
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     if payload.items.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            "Product ids cannot be empty!".to_owned(),
-        ));
+        return Err(AppError::validation("Product ids cannot be empty"));
     }
 
-    let user_id = Uuid::parse_str(&claims.sub).unwrap();
+    let user_id = parse_user_id(&claims.sub)?;
 
     let res = conn
         .transaction::<CartWithProducts, diesel::result::Error, _>(move |mut conn| {
@@ -232,7 +234,7 @@ pub async fn remove_product_from_cart(
             })
         })
         .await
-        .map_err(internal_error)?;
+        .context("Failed to remove products from cart")?;
 
     Ok(Json(res))
 }
@@ -240,7 +242,7 @@ pub async fn remove_product_from_cart(
 async fn get_cart_with_products(
     cart_id: &i32,
     conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
-) -> std::result::Result<CartWithProducts, diesel::result::Error> {
+) -> Result<CartWithProducts, diesel::result::Error> {
     use axum_shop::schema::{cart_products, carts, products, users};
 
     let (cart, products) = carts::table

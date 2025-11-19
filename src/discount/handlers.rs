@@ -2,7 +2,9 @@ use super::models::{
     Discount, DiscountProduct, DiscountType, DiscountWithProducts, DiscountWithProductsResponse,
     NewDiscount, ProductsForDiscount, UpdateDiscount,
 };
-use crate::utils::{internal_error, types::Pool};
+use crate::error::{AppError, AppErrorKind};
+use crate::utils::{internal_error, parse_user_id, types::Pool};
+use anyhow::Context;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -15,10 +17,10 @@ const QUEUE_NAME: &str = "notifications";
 
 pub async fn get_all_discounts(
     State(pool): State<Pool>,
-) -> Result<Json<DiscountWithProductsResponse>, (StatusCode, String)> {
+) -> Result<Json<DiscountWithProductsResponse>, AppError> {
     use axum_shop::schema::{discount_products, discounts, products};
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let rows = discounts::table
         .left_join(discount_products::table.on(discounts::id.eq(discount_products::discount_id)))
@@ -32,7 +34,7 @@ pub async fn get_all_discounts(
         .group_by(discounts::id)
         .load::<(Discount, serde_json::Value)>(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Discount query error")?;
 
     let discounts_with_products: Vec<DiscountWithProducts> = rows
         .into_iter()
@@ -53,19 +55,19 @@ pub async fn get_all_discounts(
 pub async fn create_discount(
     State(pool): State<Pool>,
     Json(mut payload): Json<NewDiscount>,
-) -> Result<Json<Discount>, (StatusCode, String)> {
+) -> Result<Json<Discount>, AppError> {
     use axum_shop::schema::discounts;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
-    if let Err(e) = payload.validate_dates() {
-        return Err((StatusCode::BAD_REQUEST, format!("{}", e)));
+    if let Err(_) = payload.validate_dates() {
+        return Err(AppError::validation("Failed to validate dates"));
     }
 
     let discount_type = payload.discount_type.to_lowercase();
 
     if !matches!(discount_type.as_str(), "fixed" | "percentage") {
-        return Err((StatusCode::BAD_REQUEST, "Wrong discount_type".to_owned()));
+        return Err(AppError::validation("Wrong discount type"));
     }
 
     payload.discount_type = payload.discount_type.to_lowercase();
@@ -75,7 +77,7 @@ pub async fn create_discount(
         .returning(Discount::as_returning())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to create discount")?;
 
     let event = serde_json::json!({
         "type": "Discount",
@@ -100,10 +102,10 @@ pub async fn add_discount_products(
     State(pool): State<Pool>,
     Path(id): Path<i32>,
     Json(payload): Json<ProductsForDiscount>,
-) -> Result<Json<DiscountWithProducts>, (StatusCode, String)> {
+) -> Result<Json<DiscountWithProducts>, AppError> {
     use axum_shop::schema::{discount_products, discounts, products};
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let prods: Vec<_> = payload
         .product_id
@@ -148,7 +150,7 @@ pub async fn add_discount_products(
             })
         })
         .await
-        .map_err(internal_error)?;
+        .context("Failed to add products to discount")?;
 
     Ok(Json(res))
 }
@@ -157,16 +159,13 @@ pub async fn remove_products_from_discount(
     State(pool): State<Pool>,
     Path(id): Path<i32>,
     Json(payload): Json<ProductsForDiscount>,
-) -> Result<Json<DiscountWithProducts>, (StatusCode, String)> {
+) -> Result<Json<DiscountWithProducts>, AppError> {
     use axum_shop::schema::{discount_products, discounts, products};
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     if payload.product_id.is_empty() {
-        return Err((
-            StatusCode::NOT_FOUND,
-            "Products list cannot be empty".to_owned(),
-        ));
+        return Err(AppError::no_updated());
     }
 
     let ids: Vec<&i32> = payload.product_id.iter().collect();
@@ -178,12 +177,11 @@ pub async fn remove_products_from_discount(
     )
     .execute(&mut conn)
     .await
-    .map_err(internal_error)?;
+    .context("Failed to delete products")?;
 
     if &deleted_count < &ids.len() {
-        return Err((
-            StatusCode::NOT_FOUND,
-            "Failed to remove products from discount".to_owned(),
+        return Err(AppError::validation(
+            "Failed to remove products from discount",
         ));
     }
 
@@ -196,17 +194,17 @@ pub async fn update_discount(
     State(pool): State<Pool>,
     Path(id): Path<i32>,
     Json(payload): Json<UpdateDiscount>,
-) -> Result<Json<DiscountWithProducts>, (StatusCode, String)> {
+) -> Result<Json<DiscountWithProducts>, AppError> {
     use axum_shop::schema::discounts;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     diesel::update(discounts::table.find(&id))
         .set(&payload)
         .returning(Discount::as_returning())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to update discount")?;
 
     let discount = get_discount_with_products(&id, &mut conn).await?;
 
@@ -216,7 +214,7 @@ pub async fn update_discount(
 async fn get_discount_with_products(
     discount_id: &i32,
     conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
-) -> std::result::Result<DiscountWithProducts, (StatusCode, String)> {
+) -> std::result::Result<DiscountWithProducts, AppError> {
     use axum_shop::schema::{discount_products, discounts, products};
 
     let (discount, products_json) = discounts::table
@@ -232,7 +230,7 @@ async fn get_discount_with_products(
         .group_by(discounts::id)
         .get_result::<(Discount, serde_json::Value)>(conn)
         .await
-        .map_err(internal_error)?;
+        .context("Discount query failed")?;
 
     let res = DiscountWithProducts {
         discount,
@@ -245,16 +243,16 @@ async fn get_discount_with_products(
 pub async fn delete_discount(
     State(pool): State<Pool>,
     Path(id): Path<i32>,
-) -> Result<Json<Discount>, (StatusCode, String)> {
+) -> Result<Json<Discount>, AppError> {
     use axum_shop::schema::discounts;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context("Failed to get db connection")?;
 
     let res = diesel::delete(discounts::table.filter(discounts::id.eq(&id)))
         .returning(Discount::as_returning())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to delete discount")?;
 
     Ok(Json(res))
 }

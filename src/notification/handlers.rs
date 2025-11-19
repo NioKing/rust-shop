@@ -6,7 +6,8 @@ use lettre::{Message, SmtpTransport, Transport};
 use std::env;
 use tera::{Context, Tera};
 
-use crate::utils::{internal_error, types::Pool};
+use crate::utils::{internal_error, parse_user_id, types::Pool};
+use anyhow::Context as anyhow_context;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,

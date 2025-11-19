@@ -1,5 +1,5 @@
 use crate::utils::types::Pool;
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use axum::{http::StatusCode, response::IntoResponse};
 use serde::Serialize;
 use thiserror::Error;
@@ -18,12 +18,30 @@ pub enum AppErrorKind {
     Unauthorized,
     #[error("internal error")]
     Internal,
+    #[error("nothing to update")]
+    NoUpdates,
 }
 
 #[derive(Debug)]
 pub struct AppError {
     pub kind: AppErrorKind,
     pub source: anyhow::Error,
+}
+
+impl AppError {
+    pub fn validation(msg: &'static str) -> Self {
+        Self {
+            kind: AppErrorKind::Validation,
+            source: anyhow::anyhow!(msg),
+        }
+    }
+
+    pub fn no_updated() -> Self {
+        Self {
+            kind: AppErrorKind::NoUpdates,
+            source: anyhow::anyhow!("no fields provided to update"),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -76,6 +94,7 @@ impl IntoResponse for AppError {
             AppErrorKind::RabbitMq => StatusCode::SERVICE_UNAVAILABLE,
             AppErrorKind::Unauthorized => StatusCode::UNAUTHORIZED,
             AppErrorKind::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+            AppErrorKind::NoUpdates => StatusCode::BAD_REQUEST,
         };
 
         let body = format!("{}", self.source);
