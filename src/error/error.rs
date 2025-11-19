@@ -42,6 +42,10 @@ impl AppError {
             source: anyhow::anyhow!("no fields provided to update"),
         }
     }
+
+    pub fn pool_context() -> &'static str {
+        "Failed to get a db connection"
+    }
 }
 
 #[derive(Debug, Serialize)]

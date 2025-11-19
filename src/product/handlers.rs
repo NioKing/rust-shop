@@ -4,8 +4,10 @@ use super::models::{
     CreateProductWithCategories, NewProduct, OrderByParams, Product, ProductCategory,
     ProductWithCategories, ProductWithCategoriesResponse, QueryParams, SortByParams, UpdateProduct,
 };
+use crate::error::{AppError, AppErrorKind};
 use crate::utils::internal_error;
 use crate::utils::types::Pool;
+use anyhow::Context;
 use axum::{
     extract::{Json, Multipart, Path, Query, State},
     http::StatusCode,
@@ -25,17 +27,17 @@ use validator::ValidateRequired;
 pub async fn create_product(
     State(pool): State<Pool>,
     Json(payload): Json<NewProduct>,
-) -> Result<Json<Product>, (StatusCode, String)> {
+) -> Result<Json<Product>, AppError> {
     use axum_shop::schema::products;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::insert_into(products::table)
         .values(&payload)
         .returning(Product::as_returning())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to create product")?;
 
     Ok(Json(res))
 }
@@ -43,17 +45,17 @@ pub async fn create_product(
 pub async fn create_product_with_categories(
     State(pool): State<Pool>,
     Json(payload): Json<CreateProductWithCategories>,
-) -> Result<Json<Product>, (StatusCode, String)> {
+) -> Result<Json<Product>, AppError> {
     use axum_shop::schema::{product_categories, products};
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let product = diesel::insert_into(products::table)
         .values(&payload.product)
         .returning(Product::as_returning())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to create product")?;
 
     let categories = payload
         .category_ids
@@ -68,7 +70,7 @@ pub async fn create_product_with_categories(
         .values(&categories)
         .execute(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to create product_categories")?;
 
     Ok(Json(product))
 }
@@ -76,11 +78,11 @@ pub async fn create_product_with_categories(
 pub async fn get_products(
     State(pool): State<Pool>,
     query_params: Query<QueryParams>,
-) -> Result<Json<ProductWithCategoriesResponse>, (StatusCode, String)> {
+) -> Result<Json<ProductWithCategoriesResponse>, AppError> {
     use axum_shop::schema::{categories, product_categories, products};
     use diesel_full_text_search::*;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let mut query = products::table
         .left_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
@@ -140,7 +142,7 @@ pub async fn get_products(
         .select(diesel::dsl::count_distinct(products::id))
         .first::<i64>(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to count products")?;
 
     let page_size = query_params.limit.unwrap_or(10);
     let page = query_params.offset.unwrap_or(0) / page_size + 1;
@@ -161,7 +163,7 @@ pub async fn get_products(
             }
 
             _ => {
-                return Err((StatusCode::BAD_REQUEST, "Invalid sort param".to_owned()));
+                return Err(AppError::validation("Invalid params"));
             }
         }
     };
@@ -169,7 +171,7 @@ pub async fn get_products(
     let rows = query
         .load::<(Product, serde_json::Value)>(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Query failed")?;
 
     let products_with_categories: Vec<ProductWithCategories> = rows
         .into_iter()
@@ -196,10 +198,10 @@ pub async fn get_products(
 pub async fn get_product_by_id(
     State(pool): State<Pool>,
     Path(id): Path<i32>,
-) -> Result<Json<ProductWithCategories>, (StatusCode, String)> {
+) -> Result<Json<ProductWithCategories>, AppError> {
     use axum_shop::schema::{categories, product_categories, products};
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let (product, categories_json) = products::table
         .find(id)
@@ -214,7 +216,7 @@ pub async fn get_product_by_id(
         .group_by(products::id)
         .get_result::<(Product, serde_json::Value)>(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Query failed")?;
 
     let res = ProductWithCategories {
         product: product,
@@ -227,16 +229,16 @@ pub async fn get_product_by_id(
 pub async fn delete_product(
     Path(id): Path<i32>,
     State(pool): State<Pool>,
-) -> Result<Json<Product>, (StatusCode, String)> {
+) -> Result<Json<Product>, AppError> {
     use axum_shop::schema::products;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::delete(products::table.find(id))
         .returning(Product::as_returning())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to delete product")?;
 
     Ok(Json(res))
 }
@@ -245,17 +247,17 @@ pub async fn update_product(
     State(pool): State<Pool>,
     Path(id): Path<i32>,
     Json(payload): Json<UpdateProduct>,
-) -> Result<Json<Product>, (StatusCode, String)> {
+) -> Result<Json<Product>, AppError> {
     use axum_shop::schema::products;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::update(products::table.find(id))
         .set(&payload)
         .returning(Product::as_returning())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to update product")?;
 
     Ok(Json(res))
 }
@@ -264,28 +266,29 @@ pub async fn upload_image(
     State(pool): State<Pool>,
     Path(id): Path<i32>,
     mut multipart: Multipart,
-) -> Result<(), (StatusCode, String)> {
+) -> Result<(), AppError> {
     use axum_shop::schema::products;
 
-    let mut conn = pool.get().await.map_err(internal_error)?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let product = products::table
         .find(id)
         .select(Product::as_select())
         .get_result(&mut conn)
         .await
-        .map_err(internal_error)?;
+        .context("Failed to get product")?;
 
     drop(product);
 
     let mut filename: Option<String> = None;
 
-    while let Some(field) = multipart.next_field().await.map_err(internal_error)? {
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .context("Failed to read a file")?
+    {
         if field.name().is_none() || field.file_name().is_none() {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Unable to upload file without a name".to_owned(),
-            ));
+            return Err(AppError::validation("Cannot upload file without a name"));
         }
 
         let content_type = field
@@ -293,10 +296,7 @@ pub async fn upload_image(
             .unwrap_or(mime::APPLICATION_OCTET_STREAM.as_ref());
 
         if content_type != mime::IMAGE_JPEG && content_type != mime::IMAGE_PNG {
-            return Err((
-                StatusCode::UNSUPPORTED_MEDIA_TYPE,
-                "Only JPEG and PNG images are allowed".to_owned(),
-            ));
+            return Err(AppError::validation("Only JPEG and PNG images are allowed"));
         };
 
         let extension = if content_type == mime::IMAGE_JPEG {
@@ -311,22 +311,16 @@ pub async fn upload_image(
 
         filename = Some(format!("{}_{}.{}", Uuid::new_v4(), date, extension));
 
-        let mut file = tokio::fs::File::create(&saved_file).await.map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Unable to create a file".to_owned(),
-            )
-        })?;
+        let mut file = tokio::fs::File::create(&saved_file)
+            .await
+            .context("Unable to create a file")?;
 
         let mut field = field;
 
-        while let Some(chunk) = field.chunk().await.map_err(internal_error)? {
-            file.write_all(&chunk).await.map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to write a file: {}", e),
-                )
-            })?;
+        while let Some(chunk) = field.chunk().await.context("Failed to read a file")? {
+            file.write_all(&chunk)
+                .await
+                .context("Failed to write a file")?;
         }
     }
 
@@ -336,7 +330,7 @@ pub async fn upload_image(
             .returning(Product::as_returning())
             .get_result(&mut conn)
             .await
-            .map_err(internal_error)?;
+            .context("Unable to set a product image")?;
     };
     Ok(())
 }

@@ -23,7 +23,7 @@ pub async fn get_all_cart(
 ) -> Result<Json<Vec<CartWithProducts>>, AppError> {
     use axum_shop::schema::{cart_products, carts, products};
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let rows = carts::table
         .left_join(cart_products::table.on(carts::id.eq(cart_products::cart_id)))
@@ -69,7 +69,7 @@ pub async fn add_products_to_cart(
 ) -> Result<Json<CartWithProducts>, AppError> {
     use axum_shop::schema::{cart_products, carts, products, users};
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -153,7 +153,7 @@ pub async fn remove_product_from_cart(
 ) -> Result<Json<CartWithProducts>, AppError> {
     use axum_shop::schema::{cart_products, carts, products, users};
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     if payload.items.is_empty() {
         return Err(AppError::validation("Product ids cannot be empty"));

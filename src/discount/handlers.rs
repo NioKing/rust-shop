@@ -20,7 +20,7 @@ pub async fn get_all_discounts(
 ) -> Result<Json<DiscountWithProductsResponse>, AppError> {
     use axum_shop::schema::{discount_products, discounts, products};
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let rows = discounts::table
         .left_join(discount_products::table.on(discounts::id.eq(discount_products::discount_id)))
@@ -58,7 +58,7 @@ pub async fn create_discount(
 ) -> Result<Json<Discount>, AppError> {
     use axum_shop::schema::discounts;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     if let Err(_) = payload.validate_dates() {
         return Err(AppError::validation("Failed to validate dates"));
@@ -105,7 +105,7 @@ pub async fn add_discount_products(
 ) -> Result<Json<DiscountWithProducts>, AppError> {
     use axum_shop::schema::{discount_products, discounts, products};
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let prods: Vec<_> = payload
         .product_id
@@ -162,7 +162,7 @@ pub async fn remove_products_from_discount(
 ) -> Result<Json<DiscountWithProducts>, AppError> {
     use axum_shop::schema::{discount_products, discounts, products};
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     if payload.product_id.is_empty() {
         return Err(AppError::no_updated());
@@ -197,7 +197,7 @@ pub async fn update_discount(
 ) -> Result<Json<DiscountWithProducts>, AppError> {
     use axum_shop::schema::discounts;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     diesel::update(discounts::table.find(&id))
         .set(&payload)
@@ -246,7 +246,7 @@ pub async fn delete_discount(
 ) -> Result<Json<Discount>, AppError> {
     use axum_shop::schema::discounts;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::delete(discounts::table.filter(discounts::id.eq(&id)))
         .returning(Discount::as_returning())

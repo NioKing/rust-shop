@@ -45,7 +45,7 @@ pub async fn create_user(
 
     use axum_shop::schema::{carts, profiles, user_subscriptions, users};
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let hashed_pass = create_hash(payload.password_hash).await?;
 
@@ -135,7 +135,7 @@ pub async fn get_user_by_id(
 ) -> Result<Json<SafeUser>, AppError> {
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = users::table
         .filter(users::id.eq(&id))
@@ -153,7 +153,7 @@ pub async fn get_user_by_email(
 ) -> Result<Json<SafeUser>, AppError> {
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = users::table
         .filter(users::email.eq(&payload.email))
@@ -172,7 +172,7 @@ pub async fn delete_user(
     use axum_shop::schema::carts;
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     diesel::delete(carts::table.filter(carts::user_id.eq(&id)))
         .execute(&mut conn)
@@ -195,7 +195,7 @@ pub async fn update_user_email_or_password(
 ) -> Result<Json<SafeUser>, AppError> {
     use axum_shop::schema::users;
     let now = Instant::now();
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user = users::table
         .find(id)
@@ -243,7 +243,7 @@ pub async fn update_user_email_or_password(
 pub async fn get_all_users(State(pool): State<Pool>) -> Result<Json<Vec<SafeUser>>, AppError> {
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let rows = users::table
         // .inner_join(carts::table)
@@ -315,7 +315,7 @@ pub async fn get_current_user(
     use crate::user::models::{Address, Profile};
     use axum_shop::schema::{addresses, cart_products, carts, products, profiles, users};
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -380,7 +380,7 @@ pub async fn login_user(
 ) -> Result<Json<Tokens>, AppError> {
     use axum_shop::schema::users;
     let now = Instant::now();
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user = users::table
         .filter(users::email.eq(payload.email))
@@ -426,7 +426,7 @@ pub async fn refresh_token(
 ) -> Result<Json<Tokens>, AppError> {
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let token = bearer.token();
 
@@ -574,7 +574,7 @@ async fn encode_token<T: Sync + DeserializeOwned + 'static + Serialize + Send>(
 pub async fn logout(State(pool): State<Pool>, claims: AccessTokenClaims) -> Result<(), AppError> {
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let id = parse_user_id(&claims.sub)?;
 

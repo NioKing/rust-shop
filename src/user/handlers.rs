@@ -22,7 +22,7 @@ pub async fn get_user_profile_by_id(
 ) -> Result<Json<Profile>, AppError> {
     use axum_shop::schema::profiles;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = profiles::table
         .filter(profiles::user_id.eq(&id))
@@ -40,7 +40,7 @@ pub async fn get_current_user_profile(
 ) -> Result<Json<Profile>, AppError> {
     use axum_shop::schema::profiles;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -61,7 +61,7 @@ pub async fn update_profile(
 ) -> Result<Json<Profile>, AppError> {
     use axum_shop::schema::profiles;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::update(profiles::table.find(&id))
         .set(&payload)
@@ -81,7 +81,7 @@ pub async fn update_current_user_profile(
 ) -> Result<Json<Profile>, AppError> {
     use axum_shop::schema::profiles;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -102,7 +102,7 @@ pub async fn create_address_for_current_user(
 ) -> Result<Json<Address>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -162,7 +162,7 @@ pub async fn get_user_addresses_by_id(
 ) -> Result<Json<Vec<Address>>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = addresses::table
         .filter(addresses::user_id.eq(&id))
@@ -181,7 +181,7 @@ pub async fn update_address(
 ) -> Result<Json<Address>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::update(addresses::table.find(&id))
         .set(&payload)
@@ -201,7 +201,7 @@ pub async fn update_current_user_address(
 ) -> Result<Json<Address>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -271,7 +271,7 @@ pub async fn delete_current_user_address(
 ) -> Result<Json<Address>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -292,7 +292,7 @@ pub async fn get_current_user_addresses(
 ) -> Result<Json<Vec<Address>>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -313,7 +313,7 @@ pub async fn get_current_user_default_address(
 ) -> Result<Json<Address>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -338,7 +338,7 @@ pub async fn set_address_as_default(
 ) -> Result<Json<Address>, AppError> {
     use axum_shop::schema::addresses;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -411,7 +411,7 @@ pub async fn get_all_current_user_subscriptions(
 ) -> Result<Json<Vec<UserSubscription>>, AppError> {
     use axum_shop::schema::user_subscriptions;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -433,7 +433,7 @@ pub async fn update_current_user_subscription(
 ) -> Result<Json<UserSubscription>, AppError> {
     use axum_shop::schema::user_subscriptions;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -460,7 +460,7 @@ pub async fn create_current_user_subscription(
 ) -> Result<Json<UserSubscription>, AppError> {
     use axum_shop::schema::user_subscriptions;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -490,7 +490,7 @@ pub async fn delete_current_user_subscription(
 ) -> Result<Json<UserSubscription>, AppError> {
     use axum_shop::schema::user_subscriptions;
 
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -516,7 +516,7 @@ pub async fn get_current_user_subscription(
 ) -> Result<Json<UserSubscription>, AppError> {
     use axum_shop::schema::user_subscriptions;
 
-    let mut conn = pool.get().await.context("Failed to get db connecton")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 

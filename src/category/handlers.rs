@@ -16,7 +16,7 @@ pub async fn create_category(
     State(pool): State<Pool>,
     Json(payload): Json<NewCategory>,
 ) -> Result<Json<Category>, AppError> {
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::insert_into(categories::table)
         .values(&payload)
@@ -29,7 +29,7 @@ pub async fn create_category(
 }
 
 pub async fn get_categories(State(pool): State<Pool>) -> Result<Json<Vec<Category>>, AppError> {
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = categories::table
         .select(Category::as_select())
@@ -48,7 +48,7 @@ pub async fn update_category(
     if payload.title.trim().is_empty() {
         return Err(AppError::validation("Title cannot be empty"));
     }
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::update(categories::table.find(id))
         .set(categories::title.eq(payload.title))
@@ -64,7 +64,7 @@ pub async fn get_category_by_id(
     State(pool): State<Pool>,
     Path(id): Path<i32>,
 ) -> Result<Json<Category>, AppError> {
-    let mut conn = pool.get().await.context("Failed to get db connection")?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     let res = categories::table
         .find(id)
