@@ -1,10 +1,12 @@
+use crate::error::{AppError, AppErrorKind};
+use anyhow::Context;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
-pub async fn spawn_job<Fut: Future<Output = Result<(), String>> + Send + 'static>(
+pub async fn spawn_job<Fut: Future<Output = Result<(), AppError>> + Send + 'static>(
     sheduler: &JobScheduler,
     schedule: &str,
     handler: impl Fn() -> Fut + Send + Sync + 'static + Copy,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     sheduler
         .add(
             Job::new_async(schedule, move |uuid, mut l| {
@@ -13,10 +15,10 @@ pub async fn spawn_job<Fut: Future<Output = Result<(), String>> + Send + 'static
                     handler().await;
                 })
             })
-            .map_err(|_| "Cron task has failed".to_owned())?,
+            .context("Cron task failed")?,
         )
         .await
-        .map_err(|_| "Failed to run a scheduler task".to_owned())?;
+        .context("Failed to run scheduler task")?;
 
     Ok(())
 }

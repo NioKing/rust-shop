@@ -12,6 +12,7 @@ mod rmq;
 mod user;
 mod utils;
 
+use anyhow::Context;
 use axum::{
     Router,
     middleware::{self},
@@ -23,25 +24,24 @@ use tokio_cron_scheduler::JobScheduler;
 use tower_http::{services::ServeDir, timeout::TimeoutLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{pool::get_pool, rmq::client};
+use crate::{error::AppError, pool::get_pool, rmq::client};
 
-async fn some_async_fn() -> Result<(), String> {
+async fn some_async_fn() -> Result<(), error::AppError> {
     println!("Hello from handler function");
     Ok(())
 }
 
 #[tokio::main]
-async fn main() -> Result<(), String> {
+async fn main() -> Result<(), AppError> {
     dotenv::dotenv().ok();
 
-    std::fs::create_dir_all("uploads")
-        .map_err(|e| format!("Failed to create a directory: {}", e))?;
+    std::fs::create_dir_all("uploads").context("Failed to create directory")?;
 
     let pool = get_pool().await?;
 
     let mut scheduler = JobScheduler::new()
         .await
-        .map_err(|_| "Failed to build scheduler".to_owned())?;
+        .context("Failed to build a scheduler")?;
 
     utils::scheduler::spawn_job(&scheduler, "1/7 * * * * *", some_async_fn).await?;
 

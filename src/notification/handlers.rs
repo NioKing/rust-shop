@@ -4,10 +4,11 @@ use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
 use std::env;
-use tera::{Context, Tera};
+use tera::Tera;
 
+use crate::error::{AppError, AppErrorKind};
 use crate::utils::{internal_error, parse_user_id, types::Pool};
-use anyhow::Context as anyhow_context;
+use anyhow::Context;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -18,13 +19,10 @@ use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 
 const NOTIFICATION_TEMPLATES_PATH: &str = "src/templates/**/*";
 
-pub async fn send_email(notification: Notification, pool: Pool) -> Result<(), String> {
+pub async fn send_email(notification: Notification, pool: Pool) -> Result<(), AppError> {
     use axum_shop::schema::{user_subscriptions, users};
 
-    let mut conn = pool
-        .get()
-        .await
-        .map_err(|e| format!("Failed to get pool: {}", e))?;
+    let mut conn = pool.get().await.context(AppError::pool_context())?;
 
     match notification {
         Notification::Discount(data) => {
@@ -38,7 +36,7 @@ pub async fn send_email(notification: Notification, pool: Pool) -> Result<(), St
                 .select(users::email)
                 .load(&mut conn)
                 .await
-                .map_err(|e| format!("Failed to get users: {}", e))?;
+                .context("Failed to get users")?;
 
             let html_body = render_html(&data, "discount")?;
 
@@ -67,7 +65,7 @@ pub async fn send_email(notification: Notification, pool: Pool) -> Result<(), St
 
             // build_email(&data.email, &data.email, "Welcome to Rust shop!", html_body).await?;
         }
-        _ => return Err("Failed to send an email".to_owned()),
+        _ => return Err(AppError::validation("Failed to send an email")),
     }
 
     Ok(())
@@ -78,67 +76,62 @@ async fn build_email(
     receiver_email: &str,
     subject: &str,
     body: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let email = Message::builder()
         .from(Mailbox::new(
             Some("Rust shop".to_owned()),
             "example@mail.com"
                 .parse()
-                .map_err(|e| format!("Failed to parse sender email: {}", e))?,
+                .context("Failed to parse email")?,
         ))
         .reply_to(Mailbox::new(
             Some("no-reply".to_owned()),
             "no-reply@rust.shop"
                 .parse()
-                .map_err(|e| format!("Failed to parse reply to email: {}", e))?,
+                .context("Failed to parse email")?,
         ))
         .to(Mailbox::new(
             Some(receiver_name.to_owned()),
             receiver_email
                 .parse()
-                .map_err(|e| format!("Failed to parse receiver email: {}", e))?,
+                .context("Failed to parse a reciever email")?,
         ))
         .subject(subject)
         .header(ContentType::TEXT_HTML)
         .body(body)
-        .map_err(|e| format!("Failed to build a message: {}", e))?;
+        .context("Failed to build a message")?;
 
     let creds = Credentials::new(
-        env::var("SMTP_USERNAME").map_err(|e| format!("smtp username must be set: {}", e))?,
-        env::var("SMTP_PASSWORD").map_err(|e| format!("smtp password must be set: {}", e))?,
+        env::var("SMTP_USERNAME").context("Smtp username must be set")?,
+        env::var("SMTP_PASSWORD").context("Smtp password must be set")?,
     );
 
     let mailer = SmtpTransport::relay("smtp.gmail.com")
-        .map_err(|e| format!("Wrong smtp transport: {}", e))?
+        .context("Wrong smtp transport")?
         .credentials(creds)
         .build();
 
-    tokio::task::spawn_blocking(move || {
-        mailer
-            .send(&email)
-            .map_err(|e| format!("failed to send an email: {}", e))
-    })
-    .await
-    .map_err(|e| format!("Email send task has failed: {}", e))??;
+    tokio::task::spawn_blocking(move || mailer.send(&email).context("Failed to send an email"))
+        .await
+        .context("Email send task failed")??;
 
     println!("email has been sent");
 
     Ok(())
 }
 
-fn render_html<T>(data: &T, filename: &str) -> Result<String, String>
+fn render_html<T>(data: &T, filename: &str) -> Result<String, AppError>
 where
     T: std::fmt::Debug + serde::Serialize,
 {
-    let tera =
-        Tera::new(NOTIFICATION_TEMPLATES_PATH).map_err(|e| format!("Template not found: {}", e))?;
+    let tera = Tera::new(NOTIFICATION_TEMPLATES_PATH).context("Template not found")?;
 
-    let mut ctx = Context::new();
+    let mut ctx = tera::Context::new();
     ctx.insert("data", data);
 
     let html_body = tera
         .render(&format!("notifications/{}.html", filename), &ctx)
-        .map_err(|e| format!("Failed to render html body: {}", e))?;
+        .context("Failed to render html body")?;
 
     Ok(html_body)
 }

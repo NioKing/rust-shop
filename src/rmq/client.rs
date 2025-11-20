@@ -55,7 +55,7 @@ pub async fn publish_event(queue: &str, payload: &str) -> Result<(), AppError> {
 pub async fn consume<
     T: for<'a> serde::Deserialize<'a> + std::fmt::Debug,
     // H: Fn(T) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = Result<(), String>> + Send,
+    Fut: Future<Output = Result<(), crate::error::AppError>> + Send,
 >(
     queue: &str,
     consumer_tag: &str,
@@ -114,7 +114,7 @@ pub async fn consume<
 
 pub fn spawn_consumer<
     T: for<'a> serde::Deserialize<'a> + std::fmt::Debug + Send + Sync,
-    Fut: Future<Output = Result<(), String>> + Send,
+    Fut: Future<Output = Result<(), crate::error::AppError>> + Send,
 >(
     queue: &'static str,
     tag: &'static str,
