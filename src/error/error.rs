@@ -102,6 +102,7 @@ impl IntoResponse for AppError {
         };
 
         let body = format!("{}", self.source);
+        println!("source: {:?}", self.source);
 
         (status, body).into_response()
     }

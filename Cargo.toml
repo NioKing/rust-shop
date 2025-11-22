@@ -47,3 +47,5 @@ lettre = "0.11.18"
 tera = "1.20.0"
 reqwest = { version = "0.12.23", features = ["json"] }
 tokio-cron-scheduler = "0.15.1"
+metrics = "0.24.2"
+metrics-exporter-prometheus = "0.17.2"
