@@ -12,7 +12,25 @@ use std::{
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-async fn track_metrics(req: Request, next: Next) -> impl IntoResponse {
+pub async fn start_metrics_server() {
+    let app = metrics_app();
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3003")
+        .await
+        .unwrap();
+    tracing::debug!("listening metrics on {}", listener.local_addr().unwrap());
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
+}
+
+fn metrics_app() -> Router {
+    let recorder_handle = setup_metrics_recorder();
+    Router::new().route("/metrics", get(move || ready(recorder_handle.render())))
+}
+
+pub async fn track_metrics(req: Request, next: Next) -> impl IntoResponse {
     let start = Instant::now();
 
     let path = if let Some(matched_path) = req.extensions().get::<MatchedPath>() {
@@ -63,4 +81,28 @@ fn setup_metrics_recorder() -> PrometheusHandle {
     });
 
     recorder_handle
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }

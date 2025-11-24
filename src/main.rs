@@ -74,6 +74,7 @@ async fn main() -> Result<(), AppError> {
             TraceLayer::new_for_http(),
             TimeoutLayer::new(std::time::Duration::from_secs(10)),
         ))
+        .route_layer(middleware::from_fn(metrics::track_metrics))
         .with_state(pool.clone());
 
     let app = Router::new().nest("/api", routes);
@@ -105,6 +106,10 @@ async fn main() -> Result<(), AppError> {
     );
 
     println!("listening on {}", listener.local_addr().unwrap());
+
+    tokio::spawn(async {
+        metrics::start_metrics_server().await;
+    });
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
