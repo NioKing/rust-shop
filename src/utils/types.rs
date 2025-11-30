@@ -2,3 +2,8 @@ use diesel_async::{AsyncPgConnection, pooled_connection::AsyncDieselConnectionMa
 pub type Pool = bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>;
 
 pub type Result<T> = std::result::Result<axum::Json<T>, (axum::http::StatusCode, String)>;
+
+#[derive(Clone, Debug)]
+pub struct AppState {
+    pub redis: redis::Client,
+}

@@ -1,5 +1,6 @@
 #![allow(unused)]
 mod auth;
+mod cache;
 mod cart;
 mod category;
 mod discount;
@@ -27,11 +28,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{error::AppError, pool::get_pool, rmq::client};
 
-async fn some_async_fn() -> Result<(), error::AppError> {
-    println!("Hello from handler function");
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() -> Result<(), AppError> {
     dotenv::dotenv().ok();
@@ -39,12 +35,11 @@ async fn main() -> Result<(), AppError> {
     std::fs::create_dir_all("uploads").context("Failed to create directory")?;
 
     let pool = get_pool().await?;
+    let redis = redis::Client::open("redis://localhost:6379")?;
 
     let mut scheduler = JobScheduler::new()
         .await
         .context("Failed to build a scheduler")?;
-
-    utils::scheduler::spawn_job(&scheduler, "1/7 * * * * *", some_async_fn).await?;
 
     tokio::spawn(async move {
         // scheduler.start().await.unwrap();

@@ -89,6 +89,24 @@ where
     }
 }
 
+impl From<redis::RedisError> for AppError {
+    fn from(value: redis::RedisError) -> Self {
+        AppError {
+            kind: AppErrorKind::Internal,
+            source: value.into(),
+        }
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(value: serde_json::Error) -> Self {
+        AppError {
+            kind: AppErrorKind::Internal,
+            source: value.into(),
+        }
+    }
+}
+
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let status = match self.kind {
