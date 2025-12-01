@@ -475,6 +475,7 @@ dependencies = [
  "tokio-cron-scheduler",
  "tokio-executor-trait 3.1.0",
  "tokio-reactor-trait",
+ "tower",
  "tower-http",
  "tracing",
  "tracing-subscriber",

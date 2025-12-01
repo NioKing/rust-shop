@@ -23,6 +23,7 @@ use listenfd::ListenFd;
 use std::env;
 use tokio::net::TcpListener;
 use tokio_cron_scheduler::JobScheduler;
+use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, timeout::TimeoutLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -64,12 +65,15 @@ async fn main() -> Result<(), AppError> {
         .merge(user::routes::get_routes())
         .merge(health::routes::get_routes())
         .merge(metrics::routes::get_routes())
-        .layer(middleware::from_fn(utils::print_req_res))
-        .layer((
-            TraceLayer::new_for_http(),
-            TimeoutLayer::new(std::time::Duration::from_secs(10)),
-        ))
-        .route_layer(middleware::from_fn(metrics::track_metrics))
+        .layer(
+            ServiceBuilder::new()
+                .layer(middleware::from_fn(utils::print_req_res))
+                .layer((
+                    TraceLayer::new_for_http(),
+                    TimeoutLayer::new(std::time::Duration::from_secs(10)),
+                ))
+                .layer(middleware::from_fn(metrics::track_metrics)),
+        )
         .with_state(pool.clone());
 
     let app = Router::new().nest("/api", routes);
