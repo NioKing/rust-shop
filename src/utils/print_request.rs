@@ -1,3 +1,5 @@
+use crate::error::AppError;
+use anyhow::Context;
 use axum::{
     body::{Body, Bytes},
     extract::Request,
@@ -7,10 +9,7 @@ use axum::{
 };
 use http_body_util::BodyExt;
 
-pub async fn print_req_res(
-    req: Request,
-    next: Next,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+pub async fn print_req_res(req: Request, next: Next) -> Result<impl IntoResponse, AppError> {
     let (parts, body) = req.into_parts();
     let bytes = buffer_and_print("Request", body).await?;
     let req = Request::from_parts(parts, Body::from(bytes));
@@ -24,7 +23,7 @@ pub async fn print_req_res(
     Ok(res)
 }
 
-async fn buffer_and_print<B>(direction: &str, body: B) -> Result<Bytes, (StatusCode, String)>
+async fn buffer_and_print<B>(direction: &str, body: B) -> Result<Bytes, AppError>
 where
     B: axum::body::HttpBody<Data = Bytes>,
     B::Error: std::fmt::Display,
@@ -32,10 +31,10 @@ where
     let bytes = match body.collect().await {
         Ok(collected) => collected.to_bytes(),
         Err(err) => {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                format!("failed to read {direction} body: {err}"),
-            ));
+            return Err(AppError {
+                kind: crate::error::AppErrorKind::NotFound,
+                source: anyhow::anyhow!("failed to read {direction} body: {err}"),
+            });
         }
     };
 
