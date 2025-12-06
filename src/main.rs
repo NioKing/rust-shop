@@ -87,7 +87,7 @@ async fn main() -> Result<(), AppError> {
             TcpListener::from_std(listener).unwrap()
         }
         // otherwise fall back to local listening
-        None => TcpListener::bind("127.0.0.1:3000").await.unwrap(),
+        None => TcpListener::bind("0.0.0.0:3000").await.unwrap(),
     };
 
     client::spawn_consumer(
