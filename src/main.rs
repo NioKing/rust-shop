@@ -25,7 +25,7 @@ use tokio::net::TcpListener;
 use tokio_cron_scheduler::JobScheduler;
 use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, timeout::TimeoutLayer, trace::TraceLayer};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{fmt::layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{error::AppError, pool::get_pool, rmq::client};
 
@@ -37,6 +37,7 @@ async fn main() -> Result<(), AppError> {
 
     let pool = get_pool().await?;
     let redis = redis::Client::open("redis://localhost:6379")?;
+    let state = cache::AppState { redis };
 
     let mut scheduler = JobScheduler::new()
         .await
@@ -72,7 +73,11 @@ async fn main() -> Result<(), AppError> {
                     TraceLayer::new_for_http(),
                     TimeoutLayer::new(std::time::Duration::from_secs(10)),
                 ))
-                .layer(middleware::from_fn(metrics::track_metrics)),
+                .layer(middleware::from_fn(metrics::track_metrics))
+                .layer(middleware::from_fn_with_state(
+                    state,
+                    cache::cache_middleware,
+                )),
         )
         .with_state(pool.clone());
 

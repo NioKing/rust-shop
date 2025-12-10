@@ -1,4 +1,4 @@
-use super::models::{ApplicationHealthResponse, DbHealth, RmqHealth, Status};
+use super::models::{ApplicationHealthResponse, DbHealth, RedisHealth, RmqHealth, Status};
 use crate::utils::{internal_error, types::Pool};
 use axum::{
     extract::{Json, State},
@@ -85,3 +85,5 @@ async fn rmq_check() -> RmqHealth {
 
     res
 }
+
+// async fn redis_check() -> RedisHealth {}
