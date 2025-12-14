@@ -2,6 +2,7 @@ use super::models::AppState;
 use axum::{
     body::{Body, to_bytes},
     extract::{Request, State},
+    http::header,
     middleware::Next,
     response::Response,
 };
@@ -27,6 +28,7 @@ pub async fn cache_middleware(State(pool): State<AppState>, req: Request, next: 
 
         return Response::builder()
             .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/json; charset=utf-8")
             .header("X-Cache", "HIT")
             .body(Body::from(cached))
             .unwrap();
