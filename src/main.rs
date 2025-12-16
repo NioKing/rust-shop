@@ -36,7 +36,7 @@ async fn main() -> Result<(), AppError> {
     std::fs::create_dir_all("uploads").context("Failed to create directory")?;
 
     let pool = get_pool().await?;
-    let redis = redis::Client::open("redis://localhost:6379")?;
+    let redis = redis::Client::open(env::var("REDIS_URL").context("redis url must be set")?)?;
     let state = cache::AppState { redis };
 
     let mut scheduler = JobScheduler::new()

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct ApplicationHealthResponse {
     pub database: DbHealth,
     pub rabbitmq: RmqHealth,
+    pub redis: RedisHealth,
 }
 
 #[derive(Debug, Serialize, Default)]

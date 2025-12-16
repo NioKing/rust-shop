@@ -7,12 +7,14 @@ use axum::{
 use diesel::{dsl::sql, prelude::*, sql_types::Integer};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
+use redis::{AsyncCommands, Client};
 use std::env;
 
 pub async fn check_application_health(State(pool): State<Pool>) -> Json<ApplicationHealthResponse> {
     let res = ApplicationHealthResponse {
         database: db_check(&pool).await,
         rabbitmq: rmq_check().await,
+        redis: redis_check().await,
     };
 
     Json(res)
@@ -86,4 +88,47 @@ async fn rmq_check() -> RmqHealth {
     res
 }
 
-// async fn redis_check() -> RedisHealth {}
+async fn redis_check() -> RedisHealth {
+    let key = "redis:health";
+
+    let url = match env::var("REDIS_URL") {
+        Ok(url) => url,
+        Err(_) => return RedisHealth::default(),
+    };
+
+    let now = std::time::Instant::now();
+
+    let redis = redis::Client::open(url)
+        .map_err(|_| RedisHealth::default())
+        .unwrap();
+
+    let mut conn = match redis.get_multiplexed_async_connection().await {
+        Ok(c) => c,
+        Err(_) => return RedisHealth::default(),
+    };
+
+    // let _: () = conn
+    //     .ping()
+    //     .await
+    //     .map_err(|_| RedisHealth::default())
+    //     .unwrap();
+
+    let _: () = conn
+        .set_ex(key, "body", 10)
+        .await
+        .map_err(|_| RedisHealth::default())
+        .unwrap();
+
+    let _: String = conn
+        .get(key)
+        .await
+        .map_err(|_| RedisHealth::default())
+        .unwrap();
+
+    let response_time_ms = now.elapsed().as_millis();
+
+    RedisHealth {
+        status: Status::Up,
+        response_time_ms,
+    }
+}
