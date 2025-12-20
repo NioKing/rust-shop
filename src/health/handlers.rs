@@ -107,23 +107,23 @@ async fn redis_check() -> RedisHealth {
         Err(_) => return RedisHealth::default(),
     };
 
+    let _: () = conn
+        .ping()
+        .await
+        .map_err(|_| RedisHealth::default())
+        .unwrap();
+
     // let _: () = conn
-    //     .ping()
+    //     .set_ex(key, "body", 3)
     //     .await
     //     .map_err(|_| RedisHealth::default())
     //     .unwrap();
 
-    let _: () = conn
-        .set_ex(key, "body", 10)
-        .await
-        .map_err(|_| RedisHealth::default())
-        .unwrap();
-
-    let _: String = conn
-        .get(key)
-        .await
-        .map_err(|_| RedisHealth::default())
-        .unwrap();
+    // let _: String = conn
+    //     .get(key)
+    //     .await
+    //     .map_err(|_| RedisHealth::default())
+    //     .unwrap();
 
     let response_time_ms = now.elapsed().as_millis();
 
