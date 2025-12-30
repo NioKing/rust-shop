@@ -3,6 +3,7 @@ mod auth;
 mod cache;
 mod cart;
 mod category;
+mod chat;
 mod discount;
 mod error;
 mod health;
@@ -66,6 +67,7 @@ async fn main() -> Result<(), AppError> {
         .merge(user::routes::get_routes())
         .merge(health::routes::get_routes())
         .merge(metrics::routes::get_routes())
+        .merge(chat::routes::get_routes())
         .layer(
             ServiceBuilder::new()
                 .layer(middleware::from_fn(utils::print_req_res))
