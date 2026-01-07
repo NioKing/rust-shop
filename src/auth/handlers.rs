@@ -5,7 +5,7 @@ use super::models::{
     UserEmail,
 };
 use crate::error::{AppError, AppErrorKind};
-use crate::utils::types::Pool;
+use crate::utils::types::AppState;
 use crate::utils::{internal_error, parse_user_id};
 use anyhow::Context;
 use axum::RequestPartsExt;
@@ -36,7 +36,7 @@ use uuid::Uuid;
 const QUEUE_NAME: &str = "user";
 
 pub async fn create_user(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     ValidatedJson(payload): ValidatedJson<NewUser>,
 ) -> Result<Json<SafeUser>, AppError> {
     use crate::cart::models::NewCart;
@@ -45,7 +45,7 @@ pub async fn create_user(
 
     use axum_shop::schema::{carts, profiles, user_subscriptions, users};
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let hashed_pass = create_hash(payload.password_hash).await?;
 
@@ -130,12 +130,12 @@ pub async fn create_user(
 }
 
 pub async fn get_user_by_id(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<SafeUser>, AppError> {
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let res = users::table
         .filter(users::id.eq(&id))
@@ -148,12 +148,12 @@ pub async fn get_user_by_id(
 }
 
 pub async fn get_user_by_email(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Json(payload): Json<UserEmail>,
 ) -> Result<Json<SafeUser>, AppError> {
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let res = users::table
         .filter(users::email.eq(&payload.email))
@@ -166,13 +166,13 @@ pub async fn get_user_by_email(
 }
 
 pub async fn delete_user(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<SafeUser>, AppError> {
     use axum_shop::schema::carts;
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     diesel::delete(carts::table.filter(carts::user_id.eq(&id)))
         .execute(&mut conn)
@@ -189,13 +189,13 @@ pub async fn delete_user(
 }
 
 pub async fn update_user_email_or_password(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateUserPayload>,
 ) -> Result<Json<SafeUser>, AppError> {
     use axum_shop::schema::users;
     let now = Instant::now();
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let user = users::table
         .find(id)
@@ -240,10 +240,10 @@ pub async fn update_user_email_or_password(
     Ok(Json(res))
 }
 
-pub async fn get_all_users(State(pool): State<Pool>) -> Result<Json<Vec<SafeUser>>, AppError> {
+pub async fn get_all_users(State(state): State<AppState>) -> Result<Json<Vec<SafeUser>>, AppError> {
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let rows = users::table
         // .inner_join(carts::table)
@@ -307,7 +307,7 @@ pub async fn get_all_users(State(pool): State<Pool>) -> Result<Json<Vec<SafeUser
 }
 
 pub async fn get_current_user(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     claims: AccessTokenClaims,
 ) -> Result<Json<SafeUserWithCart>, AppError> {
     use crate::cart::models::{Cart, CartWithProducts};
@@ -315,7 +315,7 @@ pub async fn get_current_user(
     use crate::user::models::{Address, Profile};
     use axum_shop::schema::{addresses, cart_products, carts, products, profiles, users};
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -375,12 +375,12 @@ pub async fn get_current_user(
 }
 
 pub async fn login_user(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Json(payload): Json<LoginUser>,
 ) -> Result<Json<Tokens>, AppError> {
     use axum_shop::schema::users;
     let now = Instant::now();
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let user = users::table
         .filter(users::email.eq(payload.email))
@@ -420,13 +420,13 @@ pub async fn login_user(
 }
 
 pub async fn refresh_token(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     claims: RefreshTokenClaims,
     bearer: TypedHeader<Authorization<Bearer>>,
 ) -> Result<Json<Tokens>, AppError> {
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let token = bearer.token();
 
@@ -571,10 +571,13 @@ async fn encode_token<T: Sync + DeserializeOwned + 'static + Serialize + Send>(
     Ok(token)
 }
 
-pub async fn logout(State(pool): State<Pool>, claims: AccessTokenClaims) -> Result<(), AppError> {
+pub async fn logout(
+    State(state): State<AppState>,
+    claims: AccessTokenClaims,
+) -> Result<(), AppError> {
     use axum_shop::schema::users;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let id = parse_user_id(&claims.sub)?;
 

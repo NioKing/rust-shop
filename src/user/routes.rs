@@ -4,9 +4,9 @@ use axum::{
 };
 
 use super::handlers;
-use crate::utils::types::Pool;
+use crate::utils::types::AppState;
 
-pub fn get_routes() -> Router<Pool> {
+pub fn get_routes() -> Router<AppState> {
     Router::new()
         .route("/users/{id}/profile", get(handlers::get_user_profile_by_id))
         .route("/profiles/{id}", patch(handlers::update_profile))

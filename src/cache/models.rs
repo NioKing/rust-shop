@@ -1,6 +1,4 @@
-use redis::Client;
+use crate::utils::types::Pool;
+use std::sync::{Arc, Mutex};
 
-#[derive(Clone)]
-pub struct AppState {
-    pub redis: Client,
-}
+use redis::Client;

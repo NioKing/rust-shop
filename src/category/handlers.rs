@@ -1,6 +1,6 @@
 use super::models::{Category, NewCategory};
 use crate::error::{AppError, AppErrorKind};
-use crate::utils::types::Pool;
+use crate::utils::types::AppState;
 use crate::utils::{internal_error, parse_user_id};
 use anyhow::Context;
 use axum::{
@@ -13,10 +13,10 @@ use diesel_async::RunQueryDsl;
 use schema::categories;
 
 pub async fn create_category(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Json(payload): Json<NewCategory>,
 ) -> Result<Json<Category>, AppError> {
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::insert_into(categories::table)
         .values(&payload)
@@ -28,8 +28,10 @@ pub async fn create_category(
     Ok(Json(res))
 }
 
-pub async fn get_categories(State(pool): State<Pool>) -> Result<Json<Vec<Category>>, AppError> {
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+pub async fn get_categories(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<Category>>, AppError> {
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let res = categories::table
         .select(Category::as_select())
@@ -41,14 +43,14 @@ pub async fn get_categories(State(pool): State<Pool>) -> Result<Json<Vec<Categor
 }
 
 pub async fn update_category(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
     Json(payload): Json<NewCategory>,
 ) -> Result<Json<Category>, AppError> {
     if payload.title.trim().is_empty() {
         return Err(AppError::validation("Title cannot be empty"));
     }
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::update(categories::table.find(id))
         .set(categories::title.eq(payload.title))
@@ -61,10 +63,10 @@ pub async fn update_category(
 }
 
 pub async fn get_category_by_id(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<Category>, AppError> {
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let res = categories::table
         .find(id)

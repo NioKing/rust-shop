@@ -1,5 +1,5 @@
 use super::models::{ApplicationHealthResponse, DbHealth, RedisHealth, RmqHealth, Status};
-use crate::utils::{internal_error, types::Pool};
+use crate::utils::{internal_error, types::AppState};
 use axum::{
     extract::{Json, State},
     http::StatusCode,
@@ -10,9 +10,11 @@ use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 use redis::{AsyncCommands, Client};
 use std::env;
 
-pub async fn check_application_health(State(pool): State<Pool>) -> Json<ApplicationHealthResponse> {
+pub async fn check_application_health(
+    State(state): State<AppState>,
+) -> Json<ApplicationHealthResponse> {
     let res = ApplicationHealthResponse {
-        database: db_check(&pool).await,
+        database: db_check(&state).await,
         rabbitmq: rmq_check().await,
         redis: redis_check().await,
     };
@@ -20,10 +22,10 @@ pub async fn check_application_health(State(pool): State<Pool>) -> Json<Applicat
     Json(res)
 }
 
-async fn db_check(pool: &Pool) -> DbHealth {
+async fn db_check(state: &AppState) -> DbHealth {
     use axum_shop::schema::products;
 
-    let mut conn = match pool.get().await {
+    let mut conn = match state.pool.get().await {
         Ok(p) => p,
         Err(_) => return DbHealth::default(),
     };

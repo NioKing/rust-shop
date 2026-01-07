@@ -1,4 +1,4 @@
-use super::models::AppState;
+use crate::utils::types::AppState;
 use axum::{
     body::{Body, to_bytes},
     extract::{Request, State},

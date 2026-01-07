@@ -6,7 +6,7 @@ use super::models::{
 };
 use crate::error::{AppError, AppErrorKind};
 use crate::utils::internal_error;
-use crate::utils::types::Pool;
+use crate::utils::types::AppState;
 use anyhow::Context;
 use axum::{
     extract::{Json, Multipart, Path, Query, State},
@@ -25,12 +25,12 @@ use uuid::Uuid;
 use validator::ValidateRequired;
 
 pub async fn create_product(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Json(payload): Json<NewProduct>,
 ) -> Result<Json<Product>, AppError> {
     use axum_shop::schema::products;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::insert_into(products::table)
         .values(&payload)
@@ -43,12 +43,12 @@ pub async fn create_product(
 }
 
 pub async fn create_product_with_categories(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Json(payload): Json<CreateProductWithCategories>,
 ) -> Result<Json<Product>, AppError> {
     use axum_shop::schema::{product_categories, products};
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let product = diesel::insert_into(products::table)
         .values(&payload.product)
@@ -76,13 +76,13 @@ pub async fn create_product_with_categories(
 }
 
 pub async fn get_products(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     query_params: Query<QueryParams>,
 ) -> Result<Json<ProductWithCategoriesResponse>, AppError> {
     use axum_shop::schema::{categories, product_categories, products};
     use diesel_full_text_search::*;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let mut query = products::table
         .left_join(product_categories::table.on(products::id.eq(product_categories::product_id)))
@@ -196,12 +196,12 @@ pub async fn get_products(
 }
 
 pub async fn get_product_by_id(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<ProductWithCategories>, AppError> {
     use axum_shop::schema::{categories, product_categories, products};
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let (product, categories_json) = products::table
         .find(id)
@@ -228,11 +228,11 @@ pub async fn get_product_by_id(
 
 pub async fn delete_product(
     Path(id): Path<i32>,
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
 ) -> Result<Json<Product>, AppError> {
     use axum_shop::schema::products;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::delete(products::table.find(id))
         .returning(Product::as_returning())
@@ -244,13 +244,13 @@ pub async fn delete_product(
 }
 
 pub async fn update_product(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
     Json(payload): Json<UpdateProduct>,
 ) -> Result<Json<Product>, AppError> {
     use axum_shop::schema::products;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::update(products::table.find(id))
         .set(&payload)
@@ -263,13 +263,13 @@ pub async fn update_product(
 }
 
 pub async fn upload_image(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
     mut multipart: Multipart,
 ) -> Result<(), AppError> {
     use axum_shop::schema::products;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let product = products::table
         .find(id)

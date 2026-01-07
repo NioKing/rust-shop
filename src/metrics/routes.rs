@@ -1,8 +1,8 @@
 use axum::{Router, routing::get};
 
 use super::metrics;
-use crate::utils::types::Pool;
+use crate::utils::types::AppState;
 
-pub fn get_routes() -> Router<Pool> {
+pub fn get_routes() -> Router<AppState> {
     Router::new()
 }

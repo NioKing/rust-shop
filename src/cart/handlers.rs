@@ -1,7 +1,7 @@
 use super::models::{Cart, CartWithProducts, ProductCarts, ProductsToCart};
 use crate::auth::models::User;
 use crate::error::{AppError, AppErrorKind};
-use crate::utils::types::Pool;
+use crate::utils::types::{AppState, Pool};
 use crate::{
     auth::models::AccessTokenClaims,
     utils::{internal_error, parse_user_id},
@@ -19,11 +19,11 @@ use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 use uuid::Uuid;
 
 pub async fn get_all_cart(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
 ) -> Result<Json<Vec<CartWithProducts>>, AppError> {
     use axum_shop::schema::{cart_products, carts, products};
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let rows = carts::table
         .left_join(cart_products::table.on(carts::id.eq(cart_products::cart_id)))
@@ -63,13 +63,13 @@ pub async fn get_all_cart(
 }
 
 pub async fn add_products_to_cart(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     claims: AccessTokenClaims,
     Json(payload): Json<ProductsToCart>,
 ) -> Result<Json<CartWithProducts>, AppError> {
     use axum_shop::schema::{cart_products, carts, products, users};
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let user_id = parse_user_id(&claims.sub)?;
 
@@ -147,13 +147,13 @@ pub async fn add_products_to_cart(
 }
 
 pub async fn remove_product_from_cart(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     claims: AccessTokenClaims,
     Json(payload): Json<ProductsToCart>,
 ) -> Result<Json<CartWithProducts>, AppError> {
     use axum_shop::schema::{cart_products, carts, products, users};
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     if payload.items.is_empty() {
         return Err(AppError::validation("Product ids cannot be empty"));

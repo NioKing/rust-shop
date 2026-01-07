@@ -1,9 +1,14 @@
 use diesel_async::{AsyncPgConnection, pooled_connection::AsyncDieselConnectionManager};
 pub type Pool = bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>;
 
-pub type Result<T> = std::result::Result<axum::Json<T>, (axum::http::StatusCode, String)>;
+use redis::Client;
+use std::sync::{Arc, Mutex};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AppState {
-    pub redis: redis::Client,
+    pub pool: Pool,
+    pub redis: Client,
+    // chat
+    pub tx: tokio::sync::broadcast::Sender<String>,
+    pub user_count: Arc<Mutex<usize>>,
 }

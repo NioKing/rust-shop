@@ -3,7 +3,7 @@ use super::models::{
     NewDiscount, ProductsForDiscount, UpdateDiscount,
 };
 use crate::error::{AppError, AppErrorKind};
-use crate::utils::{internal_error, parse_user_id, types::Pool};
+use crate::utils::{internal_error, parse_user_id, types::AppState};
 use anyhow::Context;
 use axum::{
     extract::{Json, Path, State},
@@ -11,16 +11,17 @@ use axum::{
 };
 use diesel::{dsl::sql, prelude::*};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+// use diesel_async::stateed_connection::AsyncDieselConnectionManager;
 use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
 
 const QUEUE_NAME: &str = "notifications";
 
 pub async fn get_all_discounts(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
 ) -> Result<Json<DiscountWithProductsResponse>, AppError> {
     use axum_shop::schema::{discount_products, discounts, products};
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let rows = discounts::table
         .left_join(discount_products::table.on(discounts::id.eq(discount_products::discount_id)))
@@ -53,12 +54,12 @@ pub async fn get_all_discounts(
 }
 
 pub async fn create_discount(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Json(mut payload): Json<NewDiscount>,
 ) -> Result<Json<Discount>, AppError> {
     use axum_shop::schema::discounts;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     if let Err(_) = payload.validate_dates() {
         return Err(AppError::validation("Failed to validate dates"));
@@ -99,13 +100,13 @@ pub async fn create_discount(
 }
 
 pub async fn add_discount_products(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
     Json(payload): Json<ProductsForDiscount>,
 ) -> Result<Json<DiscountWithProducts>, AppError> {
     use axum_shop::schema::{discount_products, discounts, products};
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let prods: Vec<_> = payload
         .product_id
@@ -156,13 +157,13 @@ pub async fn add_discount_products(
 }
 
 pub async fn remove_products_from_discount(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
     Json(payload): Json<ProductsForDiscount>,
 ) -> Result<Json<DiscountWithProducts>, AppError> {
     use axum_shop::schema::{discount_products, discounts, products};
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     if payload.product_id.is_empty() {
         return Err(AppError::no_updated());
@@ -191,13 +192,13 @@ pub async fn remove_products_from_discount(
 }
 
 pub async fn update_discount(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
     Json(payload): Json<UpdateDiscount>,
 ) -> Result<Json<DiscountWithProducts>, AppError> {
     use axum_shop::schema::discounts;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     diesel::update(discounts::table.find(&id))
         .set(&payload)
@@ -241,12 +242,12 @@ async fn get_discount_with_products(
 }
 
 pub async fn delete_discount(
-    State(pool): State<Pool>,
+    State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<Json<Discount>, AppError> {
     use axum_shop::schema::discounts;
 
-    let mut conn = pool.get().await.context(AppError::pool_context())?;
+    let mut conn = state.pool.get().await.context(AppError::pool_context())?;
 
     let res = diesel::delete(discounts::table.filter(discounts::id.eq(&id)))
         .returning(Discount::as_returning())
