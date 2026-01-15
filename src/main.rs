@@ -24,7 +24,7 @@ use listenfd::ListenFd;
 use std::{
     env,
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
 };
 use tokio::net::TcpListener;
 use tokio_cron_scheduler::JobScheduler;
@@ -40,15 +40,14 @@ async fn main() -> Result<(), AppError> {
 
     std::fs::create_dir_all("uploads").context("Failed to create directory")?;
 
-    let (tx, _) = tokio::sync::broadcast::channel::<String>(100);
+    let rooms = Arc::new(Mutex::new(std::collections::HashMap::new()));
 
     let pool = get_pool().await?;
     let redis = redis::Client::open(env::var("REDIS_URL").context("redis url must be set")?)?;
     let state = crate::utils::types::AppState {
         pool: pool.clone(),
         redis,
-        tx,
-        user_count: Arc::new(Mutex::new(0)),
+        rooms,
     };
 
     let mut scheduler = JobScheduler::new()

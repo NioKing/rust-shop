@@ -15,7 +15,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 pub async fn start_metrics_server() {
     let app = metrics_app();
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3003")
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3004")
         .await
         .unwrap();
     tracing::debug!("listening metrics on {}", listener.local_addr().unwrap());
