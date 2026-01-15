@@ -21,12 +21,8 @@ use axum::{
     middleware::{self},
 };
 use listenfd::ListenFd;
-use std::{
-    env,
-    net::SocketAddr,
-    sync::{Arc, Mutex, RwLock},
-};
-use tokio::net::TcpListener;
+use std::{env, net::SocketAddr, sync::Arc};
+use tokio::{net::TcpListener, sync::Mutex};
 use tokio_cron_scheduler::JobScheduler;
 use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, timeout::TimeoutLayer, trace::TraceLayer};

@@ -2,11 +2,8 @@ use diesel_async::{AsyncPgConnection, pooled_connection::AsyncDieselConnectionMa
 pub type Pool = bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>;
 
 use redis::Client;
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex, RwLock},
-};
-use tokio::sync::broadcast;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::{Mutex, broadcast};
 
 #[derive(Clone)]
 pub struct AppState {
