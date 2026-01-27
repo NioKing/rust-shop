@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use super::models::{ChatMessage, Room};
+use crate::auth::models::AccessTokenClaims;
 use crate::utils::types::AppState;
 use axum::Json;
 use axum::body::Bytes;
@@ -24,6 +25,7 @@ pub async fn handler(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    claims: AccessTokenClaims,
 ) -> Response {
     {
         let mut rooms = state.rooms.lock().await;
@@ -32,10 +34,10 @@ pub async fn handler(
             tx
         });
     }
-    ws.on_upgrade(move |socket| handle_socket(socket, state, id))
+    ws.on_upgrade(move |socket| handle_socket(socket, state, id, claims.email))
 }
 
-async fn handle_socket(mut socket: WebSocket, state: AppState, room_id: Uuid) {
+async fn handle_socket(mut socket: WebSocket, state: AppState, room_id: Uuid, email: String) {
     let (mut sender, mut receiver) = socket.split();
 
     let mut tx = {
@@ -64,7 +66,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, room_id: Uuid) {
     let mut recv_task = tokio::spawn(async move {
         while let Some(Ok(Message::Text(text))) = receiver.next().await {
             let msg = ChatMessage::Chat {
-                email: "some email".into(),
+                email: email.to_string(),
                 text: text.to_string(),
             };
             let _ = tx.send(msg);
