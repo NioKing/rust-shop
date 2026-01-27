@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use super::models::Room;
+use super::models::{ChatMessage, Room};
 use crate::utils::types::AppState;
 use axum::Json;
 use axum::body::Bytes;
@@ -47,7 +47,14 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, room_id: Uuid) {
 
     let mut send_task = tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
-            if sender.send(Message::Text(msg.into())).await.is_err() {
+            let json = match serde_json::to_string(&msg) {
+                Ok(j) => j,
+                Err(e) => {
+                    tracing::debug!("error : {}", e);
+                    continue;
+                }
+            };
+            if sender.send(Message::Text(json.into())).await.is_err() {
                 break;
             }
         }
@@ -56,7 +63,11 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, room_id: Uuid) {
     let tx = state.rooms.lock().await.get(&room_id).unwrap().clone();
     let mut recv_task = tokio::spawn(async move {
         while let Some(Ok(Message::Text(text))) = receiver.next().await {
-            let _ = tx.send(text.to_string());
+            let msg = ChatMessage::Chat {
+                email: "some email".into(),
+                text: text.to_string(),
+            };
+            let _ = tx.send(msg);
         }
     });
 
@@ -77,11 +88,3 @@ async fn room_cleanup(state: &AppState, room_id: &Uuid) {
         }
     }
 }
-
-// async fn get_all_rooms(
-//     State(state): State<AppState>,
-// ) -> Json<std::collections::HashMap<Uuid, Room>> {
-//     let res = state.rooms.write().unwrap();
-//
-//     Json(res)
-// }
