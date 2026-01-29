@@ -17,4 +17,6 @@ pub struct Room {
 #[serde(tag = "type", content = "data")]
 pub enum ChatMessage {
     Chat { email: String, text: String },
+    Join { email: String, room_id: uuid::Uuid },
+    Disconnect { email: String, room_id: uuid::Uuid },
 }
