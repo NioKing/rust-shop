@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use super::models::{ChatMessage, Room};
+use super::models::{ChatMessage, Room, Rooms};
 use crate::auth::models::AccessTokenClaims;
 use crate::utils::types::AppState;
 use axum::Json;
@@ -60,7 +60,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, room_id: Uuid, em
             let json = match serde_json::to_string(&msg) {
                 Ok(j) => j,
                 Err(e) => {
-                    tracing::debug!("error : {}", e);
+                    tracing::debug!("error : {:?}", e);
                     continue;
                 }
             };
@@ -107,3 +107,15 @@ async fn room_cleanup(state: &AppState, room_id: &Uuid) {
         }
     }
 }
+
+// pub async fn get_all_rooms(State(state): State<AppState>) -> Json<Vec<Rooms>> {
+//     let rooms = state
+//         .rooms
+//         .lock()
+//         .await
+//         .keys()
+//         .map(|id| Rooms { id: *id })
+//         .collect::<Vec<_>>();
+//
+//     Json(rooms)
+// }
