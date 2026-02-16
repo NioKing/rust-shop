@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use super::models::{ChatMessage, Room, RoomStatus};
+use super::models::{ActiveRoom, ChatMessage, Room, RoomStatus};
 use crate::auth::models::AccessTokenClaims;
 use crate::error::AppError;
 use crate::utils::types::AppState;
@@ -49,10 +49,10 @@ pub async fn handler(
 async fn handle_socket(mut socket: WebSocket, state: AppState, room_id: Uuid, email: String) {
     let (mut sender, mut receiver) = socket.split();
 
-    let (tx, mut members) = {
+    let tx = {
         let rooms = state.rooms.lock().await;
         let room = rooms.get(&room_id).unwrap();
-        (room.tx.clone(), room.members)
+        room.tx.clone()
     };
 
     let mut rx = tx.subscribe();
@@ -61,7 +61,13 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, room_id: Uuid, em
         email: email.clone(),
         room_id,
     });
-    members += 1;
+
+    {
+        let mut rooms = state.rooms.lock().await;
+        let room = rooms.get_mut(&room_id).unwrap();
+        room.members += 1;
+        println!("members: {}", room.members);
+    }
 
     let mut send_task = tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
@@ -103,32 +109,41 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, room_id: Uuid, em
         room_id,
     });
 
-    members -= 1;
+    let should_cleanup = {
+        let mut rooms = state.rooms.lock().await;
+        let room = rooms.get_mut(&room_id).unwrap();
+        room.members -= 1;
+        println!("members: {}", room.members);
 
-    room_cleanup(&state, &room_id).await;
+        room.members == 0
+    };
+
+    if should_cleanup {
+        room_cleanup(&state, &room_id).await;
+        println!("room deleted");
+    }
 }
 
 async fn room_cleanup(state: &AppState, room_id: &Uuid) {
     let mut rooms = state.rooms.lock().await;
 
-    if let Some(room) = rooms.get(room_id) {
-        if room.tx.receiver_count() == 0 {
-            rooms.remove(room_id);
-        }
-    }
+    rooms.remove(room_id);
 }
 
-// pub async fn get_all_rooms(State(state): State<AppState>) -> Result<Json<Vec<Room>>, AppError> {
-//     let rooms = state
-//         .rooms
-//         .lock()
-//         .await
-//         .iter()
-//         .map(|(id, rx)| Room {
-//             id: *id,
-//             users_count: rx.receiver_count(),
-//         })
-//         .collect::<Vec<_>>();
-//
-//     Ok(Json(rooms))
-// }
+pub async fn get_all_rooms(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<ActiveRoom>>, AppError> {
+    let rooms = state
+        .rooms
+        .lock()
+        .await
+        .iter()
+        .map(|(id, room)| ActiveRoom {
+            id: *id,
+            members: room.members,
+            status: room.status,
+        })
+        .collect::<Vec<_>>();
+
+    Ok(Json(rooms))
+}

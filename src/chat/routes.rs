@@ -8,6 +8,7 @@ use crate::utils::types::AppState;
 use crate::utils::types::Pool;
 
 pub fn get_routes() -> Router<AppState> {
-    Router::new().route("/chat/{id}", get(handlers::handler))
-    // .route("/chat/rooms", get(handlers::get_all_rooms))
+    Router::new()
+        .route("/chat/{id}", get(handlers::handler))
+        .route("/chat/rooms", get(handlers::get_all_rooms))
 }

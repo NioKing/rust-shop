@@ -23,9 +23,16 @@ pub struct Room {
     pub status: RoomStatus,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Clone, Copy)]
 pub enum RoomStatus {
     Created,
     Pending,
     Closed,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ActiveRoom {
+    pub id: uuid::Uuid,
+    pub members: usize,
+    pub status: RoomStatus,
 }
