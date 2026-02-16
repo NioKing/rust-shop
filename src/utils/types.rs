@@ -1,7 +1,7 @@
 use diesel_async::{AsyncPgConnection, pooled_connection::AsyncDieselConnectionManager};
 pub type Pool = bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>;
 
-use crate::chat::models::ChatMessage;
+use crate::chat::models::{ChatMessage, Room};
 use redis::Client;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{Mutex, broadcast};
@@ -10,5 +10,6 @@ use tokio::sync::{Mutex, broadcast};
 pub struct AppState {
     pub pool: Pool,
     pub redis: Client,
-    pub rooms: Arc<Mutex<HashMap<uuid::Uuid, broadcast::Sender<ChatMessage>>>>,
+    // pub rooms: Arc<Mutex<HashMap<uuid::Uuid, broadcast::Sender<ChatMessage>>>>,
+    pub rooms: Arc<Mutex<HashMap<uuid::Uuid, Room>>>,
 }

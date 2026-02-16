@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
-#[derive(Debug, Clone)]
-pub struct Room {
-    pub tx: broadcast::Sender<ChatMessage>,
-    pub users_count: i32,
-}
+// #[derive(Debug, Clone)]
+// pub struct Room {
+//     pub tx: broadcast::Sender<ChatMessage>,
+//     pub users_count: i32,
+// }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
@@ -15,7 +15,17 @@ pub enum ChatMessage {
     Disconnect { email: String, room_id: uuid::Uuid },
 }
 
-#[derive(Serialize, Debug)]
-pub struct Rooms {
+#[derive(Debug)]
+pub struct Room {
+    pub tx: broadcast::Sender<ChatMessage>,
     pub id: uuid::Uuid,
+    pub members: usize,
+    pub status: RoomStatus,
+}
+
+#[derive(Debug)]
+pub enum RoomStatus {
+    Created,
+    Pending,
+    Closed,
 }

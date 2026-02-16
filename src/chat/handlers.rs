@@ -2,8 +2,9 @@ use std::net::SocketAddr;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use super::models::{ChatMessage, Room, Rooms};
+use super::models::{ChatMessage, Room, RoomStatus};
 use crate::auth::models::AccessTokenClaims;
+use crate::error::AppError;
 use crate::utils::types::AppState;
 use axum::Json;
 use axum::body::Bytes;
@@ -34,7 +35,12 @@ pub async fn handler(
         let mut rooms = state.rooms.lock().await;
         rooms.entry(id).or_insert_with(|| {
             let (tx, _) = broadcast::channel(5);
-            tx
+            Room {
+                tx,
+                id,
+                members: 0,
+                status: RoomStatus::Created,
+            }
         });
     }
     ws.on_upgrade(move |socket| handle_socket(socket, state, id, email.to_string()))
@@ -43,9 +49,10 @@ pub async fn handler(
 async fn handle_socket(mut socket: WebSocket, state: AppState, room_id: Uuid, email: String) {
     let (mut sender, mut receiver) = socket.split();
 
-    let tx = {
+    let (tx, mut members) = {
         let rooms = state.rooms.lock().await;
-        rooms.get(&room_id).unwrap().clone()
+        let room = rooms.get(&room_id).unwrap();
+        (room.tx.clone(), room.members)
     };
 
     let mut rx = tx.subscribe();
@@ -54,6 +61,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, room_id: Uuid, em
         email: email.clone(),
         room_id,
     });
+    members += 1;
 
     let mut send_task = tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
@@ -95,27 +103,32 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, room_id: Uuid, em
         room_id,
     });
 
+    members -= 1;
+
     room_cleanup(&state, &room_id).await;
 }
 
 async fn room_cleanup(state: &AppState, room_id: &Uuid) {
     let mut rooms = state.rooms.lock().await;
 
-    if let Some(tx) = rooms.get(room_id) {
-        if tx.receiver_count() == 0 {
+    if let Some(room) = rooms.get(room_id) {
+        if room.tx.receiver_count() == 0 {
             rooms.remove(room_id);
         }
     }
 }
 
-// pub async fn get_all_rooms(State(state): State<AppState>) -> Json<Vec<Rooms>> {
+// pub async fn get_all_rooms(State(state): State<AppState>) -> Result<Json<Vec<Room>>, AppError> {
 //     let rooms = state
 //         .rooms
 //         .lock()
 //         .await
-//         .keys()
-//         .map(|id| Rooms { id: *id })
+//         .iter()
+//         .map(|(id, rx)| Room {
+//             id: *id,
+//             users_count: rx.receiver_count(),
+//         })
 //         .collect::<Vec<_>>();
 //
-//     Json(rooms)
+//     Ok(Json(rooms))
 // }
